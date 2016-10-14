@@ -1,0 +1,15 @@
+1.0.0 (2016-07-17)
+ - added: pragma to print all known variables
+ - added: "native" variable function which chooses "win" or "unix" depending on the OS
+ - added: support for optional "dependency" variable in process blocks
+ - added: check if output files were created after an transition
+ - changed: internal string literal handling to reduce memory usage
+ - changed: Makefile to disable assertions in release build
+ - changed: reduced executable by unifying regex library calls
+ - changed: aborting pp deleted now the output of all incomplete transitions
+ - changed: "if" pragma to handle more complex constructs
+ - fixed: unused function compiler warnings
+ - fixed: issue with threaded exceptions during prepare pass
+
+0.9.0 (2015-12-08)
+ - first release
