@@ -154,16 +154,16 @@ extern "C" {
 
 /* assume passed pointer is aligned to given size */
 #if defined(__clang__) && ((__clang_major__ > 3) || (__clang_major__ == 3 && __clang_minor__ >= 6))
-# define PCF_PCF_ASSUME_ALIGNED_AS(src, bytes) __builtin_assume(((ptrdiff_t)(src) % (ptrdiff_t)(bytes)) == 0)
+# define PCF_ASSUME_ALIGNED_AS(src, bytes) __builtin_assume(((ptrdiff_t)(src) % (ptrdiff_t)(bytes)) == 0)
 #elif defined(__ICC) && __ICC > 1110
-# define PCF_PCF_ASSUME_ALIGNED_AS(src, bytes) __assume_aligned(src, bytes)
+# define PCF_ASSUME_ALIGNED_AS(src, bytes) __assume_aligned(src, bytes)
 #elif defined(__GNUC__) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 7))
 /* broken in gcc <= 5.0.0 as of 2015-01-09 */
-# define PCF_PCF_ASSUME_ALIGNED_AS(src, bytes) if ((ptrdiff_t)(src) % (ptrdiff_t)(bytes) != 0) __builtin_unreachable()
+# define PCF_ASSUME_ALIGNED_AS(src, bytes) if ((ptrdiff_t)(src) % (ptrdiff_t)(bytes) != 0) __builtin_unreachable()
 #elif defined(_MSC_VER) && _MSC_VER >= 1400
-# define PCF_PCF_ASSUME_ALIGNED_AS(src, bytes) __assume(((ptrdiff_t)(src) % (ptrdiff_t)(bytes)) == 0)
+# define PCF_ASSUME_ALIGNED_AS(src, bytes) __assume(((ptrdiff_t)(src) % (ptrdiff_t)(bytes)) == 0)
 #else
-# define PCF_PCF_ASSUME_ALIGNED_AS(src, bytes)
+# define PCF_ASSUME_ALIGNED_AS(src, bytes)
 #endif
 
 
@@ -209,45 +209,45 @@ extern "C" {
 # endif
 /* version specific OpenMP pragmas */
 # if _OPENMP >= 199810 /* 1.0 */
-#  define PCF_PCF_DO_OMPv10(x) PCF_DO_OMP(x)
+#  define PCF_DO_OMPv10(x) PCF_DO_OMP(x)
 # endif
 # if _OPENMP >= 200203 /* 2.0 */
-#  define PCF_PCF_DO_OMPv20(x) PCF_DO_OMP(x)
+#  define PCF_DO_OMPv20(x) PCF_DO_OMP(x)
 # endif
 # if _OPENMP >= 200505 /* 2.5 */
-#  define PCF_PCF_DO_OMPv25(x) PCF_DO_OMP(x)
+#  define PCF_DO_OMPv25(x) PCF_DO_OMP(x)
 # endif
 # if _OPENMP >= 200805 /* 3.0 */
-#  define PCF_PCF_DO_OMPv30(x) PCF_DO_OMP(x)
+#  define PCF_DO_OMPv30(x) PCF_DO_OMP(x)
 # endif
 # if _OPENMP >= 201107 /* 3.1 */
-#  define PCF_PCF_DO_OMPv31(x) PCF_DO_OMP(x)
+#  define PCF_DO_OMPv31(x) PCF_DO_OMP(x)
 # endif
 # if _OPENMP >= 201307 /* 4.0 */
-#  define PCF_PCF_DO_OMPv40(x) PCF_DO_OMP(x)
+#  define PCF_DO_OMPv40(x) PCF_DO_OMP(x)
 # endif
 #else
 # define PCF_DO_OMP(x)
 #endif
 
 /* version specific OpenMP pragmas */
-#ifndef PCF_PCF_DO_OMPv10
-# define PCF_PCF_DO_OMPv10(x)
+#ifndef PCF_DO_OMPv10
+# define PCF_DO_OMPv10(x)
 #endif
-#ifndef PCF_PCF_DO_OMPv20
-# define PCF_PCF_DO_OMPv20(x)
+#ifndef PCF_DO_OMPv20
+# define PCF_DO_OMPv20(x)
 #endif
-#ifndef PCF_PCF_DO_OMPv25
-# define PCF_PCF_DO_OMPv25(x)
+#ifndef PCF_DO_OMPv25
+# define PCF_DO_OMPv25(x)
 #endif
-#ifndef PCF_PCF_DO_OMPv30
-# define PCF_PCF_DO_OMPv30(x)
+#ifndef PCF_DO_OMPv30
+# define PCF_DO_OMPv30(x)
 #endif
-#ifndef PCF_PCF_DO_OMPv31
-# define PCF_PCF_DO_OMPv31(x)
+#ifndef PCF_DO_OMPv31
+# define PCF_DO_OMPv31(x)
 #endif
-#ifndef PCF_PCF_DO_OMPv40
-# define PCF_PCF_DO_OMPv40(x)
+#ifndef PCF_DO_OMPv40
+# define PCF_DO_OMPv40(x)
 #endif
 
 

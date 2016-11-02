@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2014-2016 Daniel Starke
  * @date 2014-10-23
- * @version 2016-05-01
+ * @version 2016-10-28
  */
 #include <pcf/coding/Utf8.hpp>
 
@@ -41,9 +41,7 @@ size_t countValidUtf8Bytes(const unsigned char * buf, const size_t size) {
 			charSize = 2;
 		} else if ((*src) >= 0x80) {
 			/* Skip continuous UTF-8 character (should never happen). */
-			for (; (i + charSize) < size && src[charSize] != 0 && src[charSize] >= 0x80; charSize++) {
-				charSize++;
-			}
+			for (; (i + charSize) < size && src[charSize] != 0 && src[charSize] >= 0x80; charSize += 2);
 		} else {
 			/* ASCII character. */
 			charSize = 1;

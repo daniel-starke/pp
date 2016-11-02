@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-24
- * @version 2016-05-01
+ * @version 2016-10-24
  * @remarks May fail to compile with GCC due to a bug for MinGW target within the GC
  * ( https://gcc.gnu.org/bugzilla/show_bug.cgi?id=66488 ).
  */
@@ -17,6 +17,7 @@
 #include <boost/fusion/include/std_pair.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/optional.hpp>
+#include <boost/scope_exit.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/spirit/include/classic_position_iterator.hpp>
 #include <boost/spirit/include/qi.hpp>
@@ -85,12 +86,7 @@ void Script::reset() {
 bool Script::read(const boost::filesystem::path & path) {
 	this->reset();
 	this->mainSource = path;
-	if ( this->config.environmentVariables ) {
-		this->vars.set(
-			preDefPrefix + "SCRIPT",
-			StringLiteral(boost::filesystem::system_complete(path).string(pcf::path::utf8), preDefLocation, StringLiteral::RAW)
-		);
-	}
+	this->currentSource = path;
 	if ( this->readImport(path) ) {
 		boost::optional<StringLiteral &> literal;
 		/* successfully parsed main script file */
@@ -196,14 +192,30 @@ bool Script::readInclude(const boost::filesystem::path & path, const boost::file
 	
 	try {
 		const boost::filesystem::path oldMainSource(this->mainSource);
+		const boost::filesystem::path parentSource(this->currentSource);
 		this->reset();
 		this->mainSource = oldMainSource;
+		this->currentSource = path;
 		if ( this->config.environmentVariables ) {
-			this->vars.set(
-				preDefPrefix + "SCRIPT",
-				StringLiteral(boost::filesystem::system_complete(path).string(pcf::path::utf8), preDefLocation, StringLiteral::RAW)
-			);
+			boost::optional<StringLiteral &> scriptVar = this->vars.get(preDefPrefix + "SCRIPT");
+			if ( scriptVar ) {
+				scriptVar->setRawString(boost::filesystem::system_complete(path).string(pcf::path::utf8));
+			} else {
+				this->vars.set(
+					preDefPrefix + "SCRIPT",
+					StringLiteral(boost::filesystem::system_complete(path).string(pcf::path::utf8), preDefLocation, StringLiteral::RAW)
+				);
+			}
 		}
+		BOOST_SCOPE_EXIT(this_, parentSource) {
+			if ( this_->config.environmentVariables ) {
+				boost::optional<StringLiteral &> scriptVar = this_->vars.get(preDefPrefix + "SCRIPT");
+				if ( scriptVar ) {
+					scriptVar->setRawString(boost::filesystem::system_complete(parentSource).string(pcf::path::utf8));
+				}
+			}
+			this_->currentSource = parentSource;
+		} BOOST_SCOPE_EXIT_END
 		if (boost::spirit::qi::phrase_parse(
 				posBegin,
 				posEnd,
@@ -437,6 +449,7 @@ void Script::progressUpdate(const bool addToCurrent, const boost::uint64_t comma
 			this->progress.add(this->progressCount, dateTime);
 			if ( progressOutput ) {
 				(*progressOutput) << this->progress.format(this->progressFormat.c_str(), "command", "commands");
+				progressOutput->flush();
 			}
 			this->progressCount = 0;
 			this->progressDateTime = dateTime;

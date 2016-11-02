@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-10-01
- * @version 2016-05-01
+ * @version 2016-10-29
  * @remarks This implementation requires SQLite3 to be build with SQLITE_ENABLE_UPDATE_DELETE_LIMIT.
  */
 #include <ctime>
@@ -439,7 +439,7 @@ bool Database::getFile(FileInformation & result, const boost::filesystem::path &
 		/* file exists */
 		result.path = file;
 		result.size = static_cast<boost::uint64_t>(this->handle->getFile.getColumn<boost::int64_t>(0));
-		result.lastChange = pcf::time::fromSqlTime(this->handle->getFile.getColumn<boost::int64_t>(1));
+		result.lastChange = pcf::time::fromSqlTime(static_cast<boost::uint64_t>(this->handle->getFile.getColumn<boost::int64_t>(1)));
 		result.flags = static_cast<boost::uint64_t>(this->handle->getFile.getColumn<boost::int64_t>(2));
 		return true;
 	}
@@ -604,7 +604,7 @@ bool Database::forEachFileByFlag(const Callback & call, const boost::uint64_t fl
 	while ( this->handle->getFilesByFlag.next() ) {
 		fileInfo.path = boost::filesystem::path(this->handle->getFilesByFlag.getColumn<std::string>(0), pcf::path::utf8);
 		fileInfo.size = static_cast<boost::uint64_t>(this->handle->getFilesByFlag.getColumn<boost::int64_t>(1));
-		fileInfo.lastChange = pcf::time::fromSqlTime(this->handle->getFilesByFlag.getColumn<boost::int64_t>(2));
+		fileInfo.lastChange = pcf::time::fromSqlTime(static_cast<boost::uint64_t>(this->handle->getFilesByFlag.getColumn<boost::int64_t>(2)));
 		fileInfo.flags = static_cast<boost::uint64_t>(this->handle->getFilesByFlag.getColumn<boost::int64_t>(3));
 		lock.unlock(); /* return access to the database */
 		if ( ! call(fileInfo) ) return false;

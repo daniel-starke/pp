@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-24
- * @version 2016-05-01
+ * @version 2016-10-29
  *
  * Data hierarchy:@n
  * - Execution
@@ -95,6 +95,7 @@ public:
 	static const LineInfo preDefLocation;
 private:
 	boost::filesystem::path mainSource; /**< Path to the main source file. */
+	boost::filesystem::path currentSource; /**< Path to the currently parsing source file. */
 	Configuration config; /**< Script configuration. */
 	Configuration initialConfig; /**< Initial script configuration. */
 	VariableMap environment; /**< Pre-defined environment variables to be passed to the script. */
@@ -124,6 +125,11 @@ public:
 		environment(),
 		vars(vh)
 	{
+		this->vars.addDynamicVariable("?");
+		this->vars.addDynamicVariable("*");
+		this->vars.addDynamicVariable("@*");
+		this->vars.addDynamicVariable("PP_THREAD");
+		
 		VariableScopes & vs(this->vars.getScopes());
 		if ( vs.empty() ) {
 			this->vars.addScope();

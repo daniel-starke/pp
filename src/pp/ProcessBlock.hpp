@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-05-01
+ * @version 2016-10-29
  */
 #ifndef __PP_PROCESSBLOCK_HPP__
 #define __PP_PROCESSBLOCK_HPP__
@@ -175,6 +175,19 @@ public:
 	}
 	
 	/**
+	 * Completes the internal destination variables by resolving remaining variable references
+	 * using the passed variable handler.
+	 *
+	 * @param[in] vars - variable handle with variables for replacement
+	 */
+	void completeDestinationVariables(const VariableHandler & vars) {
+		BOOST_FOREACH(PathVariableMap::value_type & destination, this->destinations) {
+			std::string unknownVariable;
+			destination.second.replaceVariables(unknownVariable, vars);
+		}
+	}
+	
+	/**
 	 * Completes the internal commands by resolving remaining variable references
 	 * using the passed variable handler.
 	 *
@@ -197,11 +210,11 @@ public:
 	 */
 	VariableHandler createVariables(const PathLiteralPtrVector & in, boost::posix_time::ptime & mostRecentChange, bool & needBuild) const {
 		PathLiteralPtrVector filteredInput;
-		
+
 		BOOST_FOREACH(const boost::shared_ptr<PathLiteral> & literal, in) {
 			const std::string str = literal->getString();
 			const std::wstring wstr = boost::locale::conv::utf_to_utf<wchar_t>(str);
-    
+			
 			if ( boost::regex_match(wstr, this->filter) ) {
 				filteredInput.push_back(literal);
 			}
@@ -330,6 +343,9 @@ public:
 				if ( thisCommand.hasDynVariable(dynVars) ) outputDependsOnAll = true;
 			}
 		}
+		
+		/* special handling for PP_THREAD */
+		vars.addDynamicVariable("PP_THREAD");
 		
 		/* create transitions with their inputs */
 		if (this->type == ALL) {

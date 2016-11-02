@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2014-2016 Daniel Starke
  * @date 2014-03-09
- * @version 2016-05-01
+ * @version 2016-10-28
  */
 #include <cstdlib>
 #include <boost/locale.hpp>
@@ -16,6 +16,7 @@
 #include <pcf/coding/Utf8.hpp>
 
 extern "C" {
+
 #include <fcntl.h>
 #include <io.h>
 #include <windows.h>
@@ -27,12 +28,15 @@ extern int _CRT_glob;
 const int _CRT_glob = 0;
 #endif /* __MSVCRT__ */
 
-}
+} /* extern "C" */
 
 #endif /* windows, unicode */
 
 
 extern int posix_main(int argc, POSIX_ARG_TYPE ** argv, POSIX_ARG_TYPE ** enpv);
+
+
+extern "C" {
 
 
 #if defined(PCF_IS_WIN) && defined(_UNICODE)
@@ -67,3 +71,6 @@ int main(int argc, char ** argv, char ** enpv) {
 	return posix_main(argc, argv, enpv);
 #endif /* windows, unicode */
 }
+
+
+} /* extern "C" */

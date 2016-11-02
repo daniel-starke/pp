@@ -1,3 +1,13 @@
+1.1.0 (2016-11-02)
+ - added: missing syntax highlighting for "native" variable function to notepad++ syntax file
+ - added: predefined variable PP_THREAD which is replaced at execution time
+ - changed: variables passed per parameter are now allowed within destination variables
+ - changed: foreach and all syntax to make input filter optional (defaults to ".*")
+ - fixed: wrong PP_SCRIPT value when using include or import directives
+ - fixed: unwanted file descriptor inheritances during parallel program starts
+ - fixed: not terminating on CTRL-C if already queued transitions are remaining
+ - fixed: race condition when executing parallel dependencies with sequential dependencies
+
 1.0.0 (2016-07-17)
  - added: pragma to print all known variables
  - added: "native" variable function which chooses "win" or "unix" depending on the OS
@@ -6,7 +16,7 @@
  - changed: internal string literal handling to reduce memory usage
  - changed: Makefile to disable assertions in release build
  - changed: reduced executable by unifying regex library calls
- - changed: aborting pp deleted now the output of all incomplete transitions
+ - changed: aborting pp deletes now the output of all incomplete transitions
  - changed: "if" pragma to handle more complex constructs
  - fixed: unused function compiler warnings
  - fixed: issue with threaded exceptions during prepare pass

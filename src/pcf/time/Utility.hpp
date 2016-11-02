@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2014-2016 Daniel Starke
  * @date 2014-09-28
- * @version 2016-05-01
+ * @version 2016-11-02
  */
 #ifndef __LIBPCFXX_TIME_UTILITY_HPP__
 #define __LIBPCFXX_TIME_UTILITY_HPP__
@@ -350,13 +350,13 @@ public:
 	
 	/**
 	 * Formats the output string by the given format string in printf() manner.@n
-	 * @todo prefix with l - last update, r - recent average, g - global average
 	 * The following options are available:@n
 	 * Replacement prefixes:
 	 * @li %d - last update date
 	 * @li %l - last update time stamp
 	 * @li %r - recent average
 	 * @li %g - global average
+	 * 
 	 * Direct replacements:
 	 * @li %% - %
 	 * @li %c - current state value
@@ -367,6 +367,7 @@ public:
 	 * @li %P - percentage without leading spaces
 	 * @li %q - percentage with leading spaces and once decimal comma place
 	 * @li %Q - percentage without leading spaces and once decimal comma place
+	 * 
 	 * Last update date suffixes:
 	 * @li %dy - year part
 	 * @li %dY - year part with 4 digits
@@ -374,6 +375,7 @@ public:
 	 * @li %dM - month part with 2 digits
 	 * @li %dd - day of month part
 	 * @li %dD - day of month part with 2 digits
+	 * 
 	 * Last update time stamp suffixes:
 	 * @li %lh - hours part
 	 * @li %lH - hours part with 2 digits
@@ -383,6 +385,7 @@ public:
 	 * @li %lS - seconds part with 2 digits
 	 * @li %lf - milliseconds part
 	 * @li %lF - milliseconds part with 3 digits
+	 * 
 	 * Recent and global suffixes ('x' stands for 'r' or 'l'):
 	 * @li %xf - milliseconds part
 	 * @li %xF - total number of milliseconds (rounded down)

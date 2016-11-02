@@ -889,8 +889,8 @@ struct LessPathLiteralPtrValue {
 	 * right hand side value, else false
 	 */
 	bool operator() (const boost::shared_ptr<PathLiteral> & lh, const boost::shared_ptr<PathLiteral> & rh) const {
-        return lh->StringLiteral::operator< (static_cast<const StringLiteral &>(*rh));
-    }
+		return lh->StringLiteral::operator< (static_cast<const StringLiteral &>(*rh));
+	}
 };
 
 

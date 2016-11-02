@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-24
- * @version 2016-05-01
+ * @version 2016-10-30
  */
 #include <cstdlib>
 #include <iostream>
@@ -67,7 +67,7 @@ namespace pt = ::boost::posix_time;
 
 
 #ifndef PP_AUTHOR
-#define PP_VERSION "Daniel Starke"
+#define PP_AUTHOR "Daniel Starke"
 #endif /* PP_AUTHOR */
 
 
@@ -192,9 +192,6 @@ int posix_main(int argc, POSIX_ARG_TYPE ** argv, POSIX_ARG_TYPE ** enpv) {
 
 		/* execute script */
 		pp::VariableHandler vars(envVarMap);
-		vars.addDynamicVariable("?");
-		vars.addDynamicVariable("*");
-		vars.addDynamicVariable("@*");
 		/* set initial configuration */
 		pp::Configuration config;
 		config.build = build;
@@ -307,9 +304,12 @@ int posix_main(int argc, POSIX_ARG_TYPE ** argv, POSIX_ARG_TYPE ** enpv) {
  * @param[in,out] wn - worker notifier to clear
  */
 void terminate(boost::asio::io_service & ios, boost::scoped_ptr<boost::asio::io_service::work> & wn) {
-	wn.reset();
-	ios.stop();
-	cerr << "pp: terminating execution" << endl;
+	static volatile size_t num(0);
+	if (num++ <= 0) {
+		wn.reset();
+		ios.stop();
+		cerr << "pp: terminating execution" << endl;
+	}
 }
 
 

@@ -28,7 +28,7 @@
             <Keywords name="Keywords2">process all foreach none execution</Keywords>
             <Keywords name="Keywords3">db log progress progressFormat&#x000D;&#x000A;unset is not set and or file directory regex like true false</Keywords>
             <Keywords name="Keywords4">@&#x000D;&#x000A;@else if</Keywords>
-            <Keywords name="Keywords5">win unix esc upper lower directory filename file extension exists</Keywords>
+            <Keywords name="Keywords5">native win unix esc upper lower directory filename file extension exists</Keywords>
             <Keywords name="Keywords6">$</Keywords>
             <Keywords name="Keywords7"></Keywords>
             <Keywords name="Keywords8"></Keywords>

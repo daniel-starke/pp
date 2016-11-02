@@ -4,10 +4,11 @@
  * @copyright Copyright 2015-2016 Daniel Starke
  * @see fdios.h
  * @see fdious.h
- * @date 2015-08-23
+ * @date 2015-10-30
  * @internal This file is never used or compiled directly but only included.
  * @remarks Define CHAR_T to the character type before including this file.
  * @remarks See FPOPEN_FUNC() and FPCLOSE_FUNC() for further notes.
+ * @see https://blogs.msdn.microsoft.com/oldnewthing/20111216-00/?p=8873/
  */
 #define _POSIX_C_SOURCE 199309L
 #include <stdio.h>
@@ -18,7 +19,9 @@
 #include <fcntl.h>
 #include <io.h>
 #include <windows.h>
+#include <winbase.h>
 #else /* ! PCF_IS_WIN */
+#include <signal.h>
 #include <unistd.h>
 #ifdef FPOPEN_UNICODE
 #include <wchar.h>
@@ -81,6 +84,23 @@
 
 
 #ifdef PCF_IS_WIN
+/* Defined in fdio.c. */
+extern volatile HANDLE _LIBPCF_CREATEPROCESS_MUTEX;
+
+
+#if _WIN32_WINNT >= _WIN32_WINNT_VISTA
+/* It is not possible to inherit FILE_TYPE_CHAR handles to a child process via
+ * PROC_THREAD_ATTRIBUTE_HANDLE_LIST.
+ */
+static int isInheritableHandle(HANDLE handle) {
+  if ( ! handle ) return 0;
+  if (handle == INVALID_HANDLE_VALUE) return 0;
+  DWORD type = GetFileType(handle);
+  return type == FILE_TYPE_DISK || type == FILE_TYPE_PIPE;
+}
+#endif /* _WIN32_WINNT >= _WIN32_WINNT_VISTA */
+
+
 tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, const CHAR_T * command, FILE * input, const tFdioPMode mode) {
 	HANDLE pStandardInput[2];
 	HANDLE pStandardOutput[2];
@@ -88,11 +108,28 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, cons
 	int hasPStdIn, hasPStdOut, hasPStdErr;
 	SECURITY_ATTRIBUTES sa;
 	PROCESS_INFORMATION pi;
+#if _WIN32_WINNT < _WIN32_WINNT_VISTA
 #ifdef FPOPEN_UNICODE
 	STARTUPINFOW si;
+	STARTUPINFOW * siPtr;
 #else /* ! FPOPEN_UNICODE */
 	STARTUPINFOA si;
+	STARTUPINFOA * siPtr;
 #endif /* FPOPEN_UNICODE */
+#else /* _WIN32_WINNT >= _WIN32_WINNT_VISTA */
+	HANDLE pInheritHandles[3];
+#ifdef FPOPEN_UNICODE
+	STARTUPINFOEXW si;
+	STARTUPINFOW * siPtr;
+#else /* ! FPOPEN_UNICODE */
+	STARTUPINFOEXA si;
+	STARTUPINFOA * siPtr;
+#endif /* FPOPEN_UNICODE */
+	LPPROC_THREAD_ATTRIBUTE_LIST al;
+	SIZE_T alSize;
+	int hasAl;
+#endif /* _WIN32_WINNT >= _WIN32_WINNT_VISTA */
+	DWORD cf; /* creation flags */
 	BOOL bSuccess = FALSE;
 	tFdioPHandle * fd;
 	const CHAR_T * cPtr;
@@ -102,6 +139,7 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, cons
 	int * hasSpaces;
 	size_t cmdLineLen, escCount;
 	int i, flags;
+	int vistaOrNewer;
 
 	if (shellPath == NULL || shell == NULL || *shell == NULL) return NULL;
 	/* cannot access the standard input of the sub process and use a different file descriptor
@@ -113,6 +151,14 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, cons
 	fd = NULL;
 	cmdLine = NULL;
 	hasSpaces = NULL;
+	cf = 0;
+#if _WIN32_WINNT >= _WIN32_WINNT_VISTA
+	al = NULL;
+	hasAl = 0;
+	vistaOrNewer = (LOBYTE(LOWORD(GetVersion())) >= 6) ? 1 : 0;
+#else /* _WIN32_WINNT < _WIN32_WINNT_VISTA */
+	vistaOrNewer = 0;
+#endif /* _WIN32_WINNT < _WIN32_WINNT_VISTA */
 	
 	if ((((int)mode) & FDIO_RAW_CMDLINE) != 0) {
 		/* check the needed size for the command-line string */
@@ -277,6 +323,18 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, cons
 	sa.bInheritHandle = TRUE;
 	sa.lpSecurityDescriptor = NULL;
 	
+	if ( ! vistaOrNewer ) {
+		/* We need to ensure that only one thread runs this function at the time when dealing
+		 * with Windows versions earlier than Vista. This is a helper function for this. */
+		if (_LIBPCF_CREATEPROCESS_MUTEX == NULL) {
+			HANDLE p = CreateMutex(NULL, FALSE, NULL);
+			if (InterlockedCompareExchangePointer((PVOID *)(&_LIBPCF_CREATEPROCESS_MUTEX), (PVOID)p, NULL) != NULL) {
+				CloseHandle(p);
+			}
+		}
+		if (WaitForSingleObject(_LIBPCF_CREATEPROCESS_MUTEX, INFINITE) == WAIT_FAILED) goto onerror;
+	}
+	
 	if ((((int)mode) & FDIO_USE_STDIN) != 0) {
 		if ( ! CreatePipe(&(pStandardInput[READ_PIPE]), &(pStandardInput[WRITE_PIPE]), &sa, 0 /* default buffer size */) ) {
 			goto onerror;
@@ -301,6 +359,7 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, cons
 		goto onerror;
     }
 	
+	/* disable inheritance for parent handles */
 	if ((((int)mode) & FDIO_USE_STDIN) != 0) {
 		if ( ! SetHandleInformation(pStandardInput[WRITE_PIPE], HANDLE_FLAG_INHERIT, 0) ) {
 			goto onerror;
@@ -317,42 +376,108 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, cons
 		}
 	}
 	
-	ZeroMemory(&pi, sizeof(PROCESS_INFORMATION));
-	ZeroMemory(&si, sizeof(STARTUPINFO));
-	si.cb = sizeof(STARTUPINFO); 
+	ZeroMemory(&pi, sizeof(pi));
+	ZeroMemory(&si, sizeof(si));
+#if _WIN32_WINNT < _WIN32_WINNT_VISTA
+	si.cb = sizeof(si);
+	siPtr = &si;
+#else /* _WIN32_WINNT >= _WIN32_WINNT_VISTA */
+	si.StartupInfo.cb = sizeof(si);
+	siPtr = &(si.StartupInfo);
+	
+	si.StartupInfo.cb = sizeof(si);
+	
+	/* use this to avoid race conditions when passing handles to the child process (needs >=Win Vista) */
+	if ( vistaOrNewer ) {
+		alSize = 0;
+		bSuccess = InitializeProcThreadAttributeList(NULL, 1, 0, &alSize) || GetLastError() == ERROR_INSUFFICIENT_BUFFER;
+		if ( ! bSuccess ) goto onerror;
+		
+		al = (LPPROC_THREAD_ATTRIBUTE_LIST)(HeapAlloc(GetProcessHeap(), 0, alSize));
+		if (al == NULL) goto onerror;
+		
+		bSuccess = InitializeProcThreadAttributeList(al, 1, 0, &alSize);
+		if ( ! bSuccess ) goto onerror;
+		
+		hasAl = 1;
+	}
+#endif /* _WIN32_WINNT >= _WIN32_WINNT_VISTA */
+	
 	if ((((int)mode) & FDIO_USE_STDIN) != 0) {
-		si.hStdInput = pStandardInput[READ_PIPE];
+		siPtr->hStdInput = pStandardInput[READ_PIPE];
 	} else if (input != NULL) {
-		si.hStdInput = (HANDLE)_get_osfhandle(_fileno(input));
+		siPtr->hStdInput = (HANDLE)_get_osfhandle(_fileno(input));
 	} else {
-		si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+		siPtr->hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+		if (siPtr->hStdInput == INVALID_HANDLE_VALUE) goto onerror;
 	}
 	if ((((int)mode) & FDIO_USE_STDOUT) != 0) {
-		si.hStdOutput = pStandardOutput[WRITE_PIPE];
+		siPtr->hStdOutput = pStandardOutput[WRITE_PIPE];
 	} else {
-		si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+		siPtr->hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+		if (siPtr->hStdOutput == INVALID_HANDLE_VALUE) goto onerror;
 	}
 	if ((((int)mode) & FDIO_USE_STDERR) != 0) {
 		if ((((int)mode) & FDIO_COMBINE) == 0) {
-			si.hStdError = pStandardError[WRITE_PIPE];
+			siPtr->hStdError = pStandardError[WRITE_PIPE];
 		} else {
-			si.hStdError = si.hStdOutput;
+			siPtr->hStdError = siPtr->hStdOutput;
 		}
 	} else {
 		if ((((int)mode) & FDIO_COMBINE) == 0) {
-			si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+			siPtr->hStdError = GetStdHandle(STD_ERROR_HANDLE);
+			if (siPtr->hStdError == INVALID_HANDLE_VALUE) goto onerror;
 		} else {
-			si.hStdError = si.hStdOutput;
+			siPtr->hStdError = siPtr->hStdOutput;
 		}
 	}
-	si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-	si.wShowWindow = SW_HIDE;
+	siPtr->dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+	siPtr->wShowWindow = SW_HIDE;
+	
+#if _WIN32_WINNT >= _WIN32_WINNT_VISTA
+	if ( vistaOrNewer ) {
+		i = 0;
+		if ( isInheritableHandle(siPtr->hStdInput) ) pInheritHandles[i++] = siPtr->hStdInput;
+		if ( isInheritableHandle(siPtr->hStdOutput) ) pInheritHandles[i++] = siPtr->hStdOutput;
+		if (isInheritableHandle(siPtr->hStdError) && siPtr->hStdOutput != siPtr->hStdError) {
+			pInheritHandles[i++] = siPtr->hStdError;
+		}
+		
+		if (i > 0) {
+			bSuccess = UpdateProcThreadAttribute(
+				al,
+				0,
+				PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+				pInheritHandles,
+				(SIZE_T)((SIZE_T)i * sizeof(HANDLE)),
+				NULL,
+				NULL
+			);
+			
+			if ( ! bSuccess ) goto onerror;
+			
+			si.lpAttributeList = al;
+			cf = EXTENDED_STARTUPINFO_PRESENT;
+		}
+	}
+#endif
 	
 #ifdef FPOPEN_UNICODE
-	bSuccess = CreateProcessW(shellPath, cmdLine, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
+	bSuccess = CreateProcessW(shellPath, cmdLine, NULL, NULL, TRUE, cf, NULL, NULL, siPtr, &pi);
 #else /* ! FPOPEN_UNICODE */
-	bSuccess = CreateProcessA(shellPath, cmdLine, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
+	bSuccess = CreateProcessA(shellPath, cmdLine, NULL, NULL, TRUE, cf, NULL, NULL, siPtr, &pi);
 #endif /* FPOPEN_UNICODE */
+
+#if _WIN32_WINNT >= _WIN32_WINNT_VISTA
+	if (hasAl != 0) {
+		DeleteProcThreadAttributeList(al);
+		hasAl = 0;
+	}
+	if (al != NULL) {
+		HeapFree(GetProcessHeap(), 0, al);
+		al = NULL;
+	}
+#endif /* _WIN32_WINNT >= _WIN32_WINNT_VISTA */
 	
 	free(hasSpaces);
 	hasSpaces = NULL;
@@ -364,13 +489,13 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, cons
 	/* close pipe handles after child process inherited them */
 	/* see https://msdn.microsoft.com/en-gb/library/windows/desktop/aa365782(v=vs.85).aspx */
 	if ((((int)mode) & FDIO_USE_STDIN) != 0) {
-		CloseHandle(si.hStdInput);
+		CloseHandle(siPtr->hStdInput);
 	}
 	if ((((int)mode) & FDIO_USE_STDOUT) != 0) {
-		CloseHandle(si.hStdOutput);
+		CloseHandle(siPtr->hStdOutput);
 	}
 	if ((((int)mode) & FDIO_USE_STDERR) != 0 && (((int)mode) & FDIO_COMBINE) == 0) {
-		CloseHandle(si.hStdError);
+		CloseHandle(siPtr->hStdError);
 	}
 	
 	CloseHandle(pi.hThread);
@@ -402,8 +527,16 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, cons
 		fd->err = NULL;
 	}
 	
+	if ( ! vistaOrNewer ) {
+		ReleaseMutex(_LIBPCF_CREATEPROCESS_MUTEX);
+	}
+	
 	return fd;
 onerror:
+#if _WIN32_WINNT >= _WIN32_WINNT_VISTA
+	if (hasAl != 0) DeleteProcThreadAttributeList(al);
+	if (al != NULL) HeapFree(GetProcessHeap(), 0, al);
+#endif /* _WIN32_WINNT >= _WIN32_WINNT_VISTA */
 	if (hasPStdIn != 0) {
 		CloseHandle(pStandardInput[READ_PIPE]);
 		CloseHandle(pStandardInput[WRITE_PIPE]);
@@ -415,6 +548,9 @@ onerror:
 	if (hasPStdErr != 0) {
 		CloseHandle(pStandardError[READ_PIPE]);
 		CloseHandle(pStandardError[WRITE_PIPE]);
+	}
+	if ( ! vistaOrNewer ) {
+		ReleaseMutex(_LIBPCF_CREATEPROCESS_MUTEX);
 	}
 	if (hasSpaces != NULL) free(hasSpaces);
 	if (fd != NULL) free(fd);
@@ -449,11 +585,23 @@ int FPCLOSE_FUNC(tFdioPHandle * fd) {
 	return exitCode;
 }
 #else /* ! PCF_IS_WIN */
+#ifndef NSIG
+#define NSIG 32
+#endif
+
+
+/* Defined in fdio.c. */
+extern int fdio_closeNonDefFds();
+
+
 tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const char ** shell, const char * command, FILE * input, const tFdioPMode mode) {
 	int pStandardInput[2];
 	int pStandardOutput[2];
 	int pStandardError[2];
 	int hasPStdIn, hasPStdOut, hasPStdErr;
+	sigset_t oldMask, newMask;
+	struct sigaction sigAction;
+	int hasOldMask;
 	tFdioPHandle * fd;
 	size_t numArgs, strLen, totalStrLen;
 	const CHAR_T * arg, ** args;
@@ -469,6 +617,7 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const char ** shell, const 
 	hasPStdIn = 0;
 	hasPStdOut = 0;
 	hasPStdErr = 0;
+	hasOldMask = 0;
 	fd = NULL;
 	argv = NULL;
 	
@@ -508,6 +657,12 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const char ** shell, const 
 
     if ((fd = (tFdioPHandle *)malloc(sizeof(tFdioPHandle))) == NULL) goto onerror;
 	
+	/* Temporary disable signal handling for calling thread to avoid unexpected signals between
+	 * fork() and execvp(). */
+	sigfillset(&newMask);
+	if (pthread_sigmask(SIG_SETMASK, &newMask, &oldMask) != 0) goto onerror;
+	hasOldMask = 1;
+	
 	fd->pid = fork();
 
 	switch (fd->pid) {
@@ -515,6 +670,14 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const char ** shell, const 
 		goto onerror;
 		break;
 	case 0: /* child */
+		/* clear out signal handlers to avoid unexpected events */
+		sigAction.sa_handler = SIG_DFL;
+		sigAction.sa_flags = 0;
+		sigemptyset(&sigAction.sa_mask);
+		for (i = 0; i < NSIG; i++) sigaction(i, &sigAction, NULL);
+		if (pthread_sigmask(SIG_SETMASK, &oldMask, NULL) < 0) goto onerror;
+	
+		/* set stdin/stdout/stderr accordingly */
 		if ((((int)mode) & FDIO_USE_STDIN) != 0) {
 			dup2(pStandardInput[READ_PIPE], STDIN_FILENO);
 		} else if (input != NULL) {
@@ -540,6 +703,9 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const char ** shell, const 
 		if (hasPStdOut != 0) close(pStandardOutput[READ_PIPE]);
 		if (hasPStdErr != 0) close(pStandardError[READ_PIPE]);
 		
+		/* close all unwanted file descriptors inherited from the parent process */
+		if (fdio_closeNonDefFds() != 1) exit(1);
+		
 		/* can change to any exec* function family */
 		/* see why argv cannot be const char **: http://pubs.opengroup.org/onlinepubs/9699919799/functions/exec.html#tag_16_111 */
 		execvp(shellPath, argv);
@@ -547,6 +713,11 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const char ** shell, const 
 		
 		break;
 	default: /* parent */
+		/* restore original signal handler */
+		if (hasOldMask != 0) {
+			pthread_sigmask(SIG_SETMASK, &oldMask, NULL);
+		}
+		
 		/* close other pipe fds */
 		if (hasPStdIn != 0) close(pStandardInput[READ_PIPE]);
 		if (hasPStdOut != 0) close(pStandardOutput[WRITE_PIPE]);
@@ -588,6 +759,10 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const char ** shell, const 
 	
 	return fd;
 onerror:
+	/* restore original signal handler */
+	if (hasOldMask != 0) {
+		pthread_sigmask(SIG_SETMASK, &oldMask, NULL);
+	}
 	if (hasPStdIn != 0) {
 		close(pStandardInput[READ_PIPE]);
 		close(pStandardInput[WRITE_PIPE]);

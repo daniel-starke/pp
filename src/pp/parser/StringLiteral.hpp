@@ -29,10 +29,10 @@
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
 /* adapt pp::StringLiteralPart to Boost Fusion */
 BOOST_FUSION_ADAPT_STRUCT(
-    pp::StringLiteralPart,
-    (std::string, value)
-    (pp::StringLiteralPart::Type, type)
-    (pp::StringLiteralFunctionVector, functions)
+	pp::StringLiteralPart,
+	(std::string, value)
+	(pp::StringLiteralPart::Type, type)
+	(pp::StringLiteralFunctionVector, functions)
 )
 #endif
 
@@ -58,34 +58,34 @@ struct StringLiteral : qi::grammar<Iterator, StringLiteralCaptureVector(pp::Stri
 	boost::optional<char> endOfInputCharacter; /**< Optionally terminate grammar at this character. */
 	bool printError; /**< Set to true to print parsing errors to the standard output console. Throw an exception otherwise. */
 	/* simple grammars */
-    qi::rule<Iterator> endOfInput;
-    qi::rule<Iterator> startReplacement;
-    qi::rule<Iterator> beginVarGroup;
-    qi::rule<Iterator> endVarGroup;
-    qi::rule<Iterator> beginCaptureGroup;
-    qi::rule<Iterator> endCaptureGroup;
-    qi::rule<Iterator> beginIgnoreCaptureGroup;
-    qi::rule<Iterator> beginNamedCaptureGroup;
-    qi::rule<Iterator> endNamedCaptureGroup;
-    qi::rule<Iterator> subStringParamDelimiter;
-    qi::rule<Iterator, char()> beginVarIdxGroup;
-    qi::rule<Iterator, char()> endVarIdxGroup;
+	qi::rule<Iterator> endOfInput;
+	qi::rule<Iterator> startReplacement;
+	qi::rule<Iterator> beginVarGroup;
+	qi::rule<Iterator> endVarGroup;
+	qi::rule<Iterator> beginCaptureGroup;
+	qi::rule<Iterator> endCaptureGroup;
+	qi::rule<Iterator> beginIgnoreCaptureGroup;
+	qi::rule<Iterator> beginNamedCaptureGroup;
+	qi::rule<Iterator> endNamedCaptureGroup;
+	qi::rule<Iterator> subStringParamDelimiter;
+	qi::rule<Iterator, char()> beginVarIdxGroup;
+	qi::rule<Iterator, char()> endVarIdxGroup;
 	qi::uint_parser<char, 16, 2, 2> hexOctet;
 	qi::rule<Iterator, char()> basicChar;
 	/* complex grammars */
-    qi::rule<Iterator, pp::StringLiteralPart()> stringPart;
+	qi::rule<Iterator, pp::StringLiteralPart()> stringPart;
 	qi::rule<Iterator, StringLiteralReplacementPair(), qi::locals<char, Iterator> > replacementPattern;
 	qi::rule<
 		Iterator,
 		pp::StringLiteralFunctionPair(bool),
 		qi::locals<Iterator /* _a */, std::string /* _b */, StringLiteralReplacementPair /* _c */>
 	> function;
-    qi::rule<Iterator, pp::StringLiteralPart()> variable;
-    qi::rule<Iterator, pp::StringLiteralPart()> variablePart;
-    qi::rule<Iterator, pp::StringLiteralList()> partList;
-    qi::rule<Iterator, pp::StringLiteralCapturePair(), qi::locals<pp::CaptureNameVector> > capture;
-    qi::rule<Iterator, pp::StringLiteralCaptureVector()> captureList;
-    qi::rule<Iterator, pp::StringLiteralCaptureVector(pp::StringLiteral::ParsingFlags, boost::optional<char>)> startRule;
+	qi::rule<Iterator, pp::StringLiteralPart()> variable;
+	qi::rule<Iterator, pp::StringLiteralPart()> variablePart;
+	qi::rule<Iterator, pp::StringLiteralList()> partList;
+	qi::rule<Iterator, pp::StringLiteralCapturePair(), qi::locals<pp::CaptureNameVector> > capture;
+	qi::rule<Iterator, pp::StringLiteralCaptureVector()> captureList;
+	qi::rule<Iterator, pp::StringLiteralCaptureVector(pp::StringLiteral::ParsingFlags, boost::optional<char>)> startRule;
 	size_t captureIndex;
 	
 	/**

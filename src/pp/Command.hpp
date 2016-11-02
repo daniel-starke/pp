@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-05-01
+ * @version 2016-10-30
  */
 #ifndef __PP_COMMAND_HPP__
 #define __PP_COMMAND_HPP__
@@ -57,6 +57,7 @@ private:
 	boost::posix_time::ptime startDt; /**< Start date time. */
 	boost::posix_time::ptime endDt; /**< End date time. */
 	std::string output; /**< Command output. */
+	std::string threadId; /**< Content for PP_THREAD. */
 	int exitCode; /**< Command exit code. */
 	State state; /**< Current command state. @see State */
 	mutable boost::mutex mutex; /**< Command mutex. */
@@ -76,7 +77,9 @@ public:
 		shell(sh),
 		command(cmd),
 		state(IDLE)
-	{}
+	{
+		this->updateThreadId();
+	}
 	
 	/**
 	 * Copy constructor.
@@ -89,6 +92,7 @@ public:
 		startDt(o.startDt),
 		endDt(o.endDt),
 		output(o.output),
+		threadId(o.threadId),
 		exitCode(o.exitCode),
 		state(o.state)
 	{}
@@ -106,6 +110,7 @@ public:
 			this->startDt = o.startDt;
 			this->endDt = o.endDt;
 			this->output = o.output;
+			this->threadId = o.threadId;
 			this->exitCode = o.exitCode;
 			this->state = o.state;
 		}
@@ -139,7 +144,9 @@ public:
 	StringLiteral getFinalCommandString() const {
 		StringLiteral aCommand(this->command);
 		StringLiteral result(this->shell.cmdLine);
-		VariableMap replacements;
+		VariableMap ppThread, replacements;
+		ppThread["PP_THREAD"].setRawString(this->threadId);
+		aCommand.replaceVariables(ppThread);
 		replacements["?"] = StringLiteral(this->shell.replace(aCommand.getString()), aCommand.getLineInfo(), StringLiteral::RAW);
 		result.replaceVariables(replacements);
 		return result;
@@ -158,7 +165,9 @@ public:
 		StringLiteral aCommand(this->command);
 		aCommand.replaceVariables(vars);
 		StringLiteral result(this->shell.cmdLine);
-		VariableMap replacements;
+		VariableMap ppThread, replacements;
+		ppThread["PP_THREAD"].setRawString(this->threadId);
+		aCommand.replaceVariables(ppThread);
 		replacements["?"] = StringLiteral(this->shell.replace(aCommand.getString()), aCommand.getLineInfo(), StringLiteral::RAW);
 		result.replaceVariables(replacements);
 		return result;
@@ -227,8 +236,10 @@ public:
 		this->startDt = boost::posix_time::ptime();
 		this->endDt = boost::posix_time::ptime();
 		this->output.clear();
+		this->threadId.clear();
 		this->exitCode = 0;
 		this->state = IDLE;
+		this->updateThreadId();
 	}
 	
 	/**
@@ -318,6 +329,7 @@ public:
 	bool execute(const bool checkCommand = false) {
 		boost::mutex::scoped_lock lock(this->mutex);
 		this->state = RUNNING;
+		this->updateThreadId();
 		/* execute and fill class attributes */
 		boost::optional<pcf::process::ProcessPipe> proc;
 		std::ostringstream sout;
@@ -363,9 +375,9 @@ public:
 			sout << static_cast<std::streambuf *>(&in);
 		}
 		lock.lock();
-		this->endDt = boost::posix_time::microsec_clock::universal_time();
 		this->output = sout.str();
 		this->exitCode = proc->wait();
+		this->endDt = boost::posix_time::microsec_clock::universal_time();
 		if (this->exitCode < 0) this->exitCode = 1;
 		if (checkCommand && this->exitCode != 0) {
 			this->state = FAILED;
@@ -394,6 +406,16 @@ private:
 			% t.seconds()
 			% (t.total_milliseconds() % 1000)
 		);
+	}
+	
+	
+	/**
+	 * Updates the threadId variable with the current thread ID.
+	 */
+	void updateThreadId() {
+		std::stringstream sout;
+		sout << boost::this_thread::get_id();
+		this->threadId = sout.str();
 	}
 };
 

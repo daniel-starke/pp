@@ -49,7 +49,7 @@ To build the setup (needs NSIS):
 
     make setup
 
-Linux: [![Linux Build](https://travis-ci.org/daniel-starke/pp.svg?branch=master)](https://travis-ci.org/daniel-starke/pp)
+[![Linux Build Status](https://travis-ci.org/daniel-starke/pp.svg?label=Linux%20build)](https://travis-ci.org/daniel-starke/pp)
 
 License
 =======

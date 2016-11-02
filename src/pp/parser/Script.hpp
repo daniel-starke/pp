@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-10-31
- * @version 2016-05-01
+ * @version 2016-11-01
  */
 #ifndef __PP_PARSER_SCRIPT_HPP__
 #define __PP_PARSER_SCRIPT_HPP__
@@ -50,7 +50,7 @@ namespace encoding = boost::spirit::standard;
  */
 template <typename Iterator>
 struct ScriptSkipParser : qi::grammar<Iterator> {
-    qi::rule<Iterator> skipper; /**< The skip grammar. */
+	qi::rule<Iterator> skipper; /**< The skip grammar. */
 	
 	/**
 	 * Default constructor.
@@ -163,6 +163,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 	qi::rule<Iterator, std::string(), qi::locals<char> > rawPatternString;
 	qi::rule<Iterator, pp::StringLiteral(), qi::locals<Iterator> > patternString;
 	qi::rule<Iterator, pp::StringLiteral(bool, bool), qi::locals<Iterator> > nonEmptyValueString;
+	qi::rule<Iterator, pp::StringLiteral(), qi::locals<Iterator> > matchAnyRegexString;
 	qi::rule<Iterator, pp::StringLiteral()> inputFileFilter;
 	qi::rule<Iterator, void(), qi::locals<bool, Verbosity, Iterator, std::string>, Skipper> pragma;
 	qi::rule<Iterator, bool(), qi::locals<boost::optional<pp::StringLiteral> /* _a */, bool /* _b */>, Skipper> beCheck;
@@ -174,7 +175,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 	qi::rule<Iterator> pragmaEnd;
 	qi::rule<Iterator, void(), qi::locals<Iterator>, Skipper> variableRemoval;
 	qi::rule<Iterator, void(bool, bool), qi::locals<std::string, pp::StringLiteral>, Skipper> variableAssignment;
-	qi::rule<Iterator, void(std::string), qi::locals<std::string, pp::StringLiteral>, Skipper> patternAssignment;
+	qi::rule<Iterator, void(std::string, bool), qi::locals<std::string, pp::StringLiteral>, Skipper> patternAssignment;
 	qi::rule<Iterator, void(pp::ProcessBlock &, bool), qi::locals<std::string, pp::StringLiteral, bool>, Skipper> destinationVariable;
 	qi::rule<Iterator, void(pp::ProcessBlock &), qi::locals<std::string, pp::StringLiteral>, Skipper> dependencyVariable;
 	qi::rule<Iterator, std::string()> commandLineStart;
@@ -201,7 +202,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 	qi::rule<Iterator, pp::Execution(), Skipper> execution;
 	qi::rule<Iterator, Skipper> globalPragmaIf;
 	qi::rule<Iterator, Skipper> globalExpression;
-    qi::rule<Iterator, Skipper> scriptGrammar; /**< Grammar of the complete script. */
+	qi::rule<Iterator, Skipper> scriptGrammar; /**< Grammar of the complete script. */
 	
 	/**
 	 * Constructor.
@@ -209,7 +210,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 	 * @param[in,out] s - reference to the used script instance
 	 * @param[in] p - path of the script file
 	 */
-    Script(pp::Script & s, const boost::filesystem::path & p) :
+	Script(pp::Script & s, const boost::filesystem::path & p) :
 		Script::base_type(scriptGrammar, "parallel processor script"),
 		script(s),
 		sourcePath(p)
@@ -259,11 +260,11 @@ struct Script : qi::grammar<Iterator, Skipper> {
 		bom.name("byte-order-mark");
 		bom = -lit("\xEF\xBB\xBF"); /* byte-order-mark for UTF-8 */
 		
-        endOfInput.name("pragma, variable assignment, process or execution");
-        endOfInput = eoi;
+		endOfInput.name("pragma, variable assignment, process or execution");
+		endOfInput = eoi;
 		
-        endOfLine.name("end-of-line");
-        endOfLine = eol;
+		endOfLine.name("end-of-line");
+		endOfLine = eol;
 		
 		/* normal string literal omitting their match */
 #define MAKE_LITERAL(var, x, y) \
@@ -362,8 +363,8 @@ struct Script : qi::grammar<Iterator, Skipper> {
 		arrayIndex.name("array index");
 		arrayIndex = (char_("0") | (char_("1-9") >> *char_("0-9")));
 		
-        idString.name("identifier");
-        idString = char_("_a-zA-Z") >> *char_("_a-zA-Z0-9");
+		idString.name("identifier");
+		idString = char_("_a-zA-Z") >> *char_("_a-zA-Z0-9");
 		
 		processId.name("valid process ID");
 		processId = idString.alias();
@@ -390,8 +391,8 @@ struct Script : qi::grammar<Iterator, Skipper> {
 		
 		/* @param[in] _r1 - enable checking
 		 * @param[in] _r2 - enable captures */
-        valueString.name("string");
-        valueString = (
+		valueString.name("string");
+		valueString = (
 			&(singleQuote | doubleQuote) >> (
 				  (singleQuote >> omit[iter_pos[_a = _1]] >> -stringLiteral(_r2, '\'') > singleQuote)
 				| (doubleQuote >> omit[iter_pos[_a = _1]] >> -stringLiteral(_r2, '"') > doubleQuote)
@@ -404,19 +405,24 @@ struct Script : qi::grammar<Iterator, Skipper> {
 			>> (*(!char_(_a) >> char_)) >> char_(_a)
 		);
 		
-        patternString.name("replacement pattern");
-        patternString = (
+		patternString.name("replacement pattern");
+		patternString = (
 			omit[iter_pos[_a = _1]] >> rawPatternString[_pass = phx::bind<bool>(&Script::getRawStringLiteral, this, _val, _1, _a)]
 		);
 		
 		/* @param[in] _r1 - enable checking
 		 * @param[in] _r2 - enable captures */
-        nonEmptyValueString.name("non-empty string");
-        nonEmptyValueString = (
+		nonEmptyValueString.name("non-empty string");
+		nonEmptyValueString = (
 			&(singleQuote | doubleQuote) >> (
 				  (singleQuote >> omit[iter_pos[_a = _1]] > stringLiteral(_r2, '\'') > singleQuote)
 				| (doubleQuote >> omit[iter_pos[_a = _1]] > stringLiteral(_r2, '"') > doubleQuote)
 			)[_pass = phx::bind<bool>(&Script::getStringLiteral, this, _val, _1, _a, _r1)]
+		);
+		
+		matchAnyRegexString.name("nothing");
+		matchAnyRegexString = (
+			omit[iter_pos[_a = _1]] >> eps[_pass = phx::bind<bool>(&Script::getRawStringLiteral, this, _val, ".*", _a)]
 		);
 		
 		variableRemoval.name("variable removal");
@@ -430,17 +436,19 @@ struct Script : qi::grammar<Iterator, Skipper> {
 		variableAssignment.name("variable assignment");
 		variableAssignment = (
 			(idString[_a = _1] >> assign > valueString(_r1, _r2)[_b = _1])[
-				_pass = phx::bind<bool>(&Script::setVariable, this, _a, _b, _r1)
+				_pass = phx::bind<bool>(&Script::setVariable, this, _a, _b, _r1, false)
 			]
 		);
 		
+		/* @param[in] _r1 - variable name
+		 * @param[in] _r2 - true to enable warning on variable value overwrite */
 		patternAssignment.name("replacement pattern assignment");
 		patternAssignment = (
 			(
 				as_string[
 					string(_r1) >> -(beginArray > arrayIndex > endArray)
 				][_a = _1] > assign > patternString[_b = _1]
-			)[_pass = phx::bind<bool>(&Script::setVariable, this, _a, _b, false)]
+			)[_pass = phx::bind<bool>(&Script::setVariable, this, _a, _b, false, _r2)]
 		);
 		
 		pragma.name("pragma");
@@ -468,9 +476,9 @@ struct Script : qi::grammar<Iterator, Skipper> {
 						specifyGroup[phx::bind(&Script::defShellReset, this)]
 						> idString[phx::bind(&Script::defShellSetName, this, _1)]
 						> beginGroup[phx::bind(&Script::enterScope, this)]
-						> (*((!endGroup) >> (
-							patternAssignment(std::string("replace")) | variableAssignment(false, false)
-						)) >> iter_pos[_c = _1])[_pass = phx::bind<bool>(&Script::defShellParameters, this, _c)]
+						> name("variable assignment")[(*((!endGroup) >> (
+							patternAssignment(std::string("replace"), true) | variableAssignment(false, false)
+						)) >> iter_pos[_c = _1])[_pass = phx::bind<bool>(&Script::defShellParameters, this, _c)]]
 						> endGroup[phx::bind(&Script::leaveScope, this)]
 					]
 					| idString[_pass = phx::bind<bool>(&Script::useShell, this, _1, _c)]
@@ -538,7 +546,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 		pragmaEnd = pragmaPrefix >> l_end;
 		
 		inputFileFilter.name("input file filter");
-		inputFileFilter = nonEmptyValueString(true, false);
+		inputFileFilter = nonEmptyValueString(true, false) | matchAnyRegexString;
 		
 		/* @param[in] _r1 - output variable for process block
 		 * @param[in] _r2 - enable syntactic temporaries */
@@ -584,7 +592,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 			][_pass = phx::bind<bool>(&Script::setCommand, this, _val, _1, _a)]
 		);
 		
-		processBlock.name("foreach | all : \"regex\" { ... } | none { ... }");
+		processBlock.name("foreach \"regex\" { ... } | all \"regex\" { ... } | none { ... }");
 		processBlock = (
 			(iter_pos[phx::bind(&Script::setLineInfo<ProcessBlock>, _val, _1)]
 			>> (l_foreach[_a = val(ProcessBlock::FOREACH)] | l_all[_a = val(ProcessBlock::ALL)] | l_none[_a = val(ProcessBlock::NONE)]))
@@ -743,7 +751,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 			| execution[phx::bind(&Script::addExecution, this, _1)]
 		);
 		
-        scriptGrammar = eps > bom
+		scriptGrammar = eps > bom
 			> *globalExpression
 			> endOfInput;
 		
@@ -751,7 +759,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 		qi::on_success(x, ref(std::cout) << "OK(" << #x << ")" << std::endl); \
 		qi::on_error<qi::fail>(x, ref(std::cout) << "NOK(" << #x << "): " << phx::construct<std::string>(_1, _3) << std::endl)
 		DEBUG_NODE(scriptGrammar);*/
-    }
+	}
 
 private:
 	/**
@@ -1039,7 +1047,7 @@ private:
 			std::cerr << scriptPos << ": Missing shell parameter \"path\"." << std::endl;
 			return false;
 		} else if ( value->isVariable() ) {
-			std::cerr << value->getLineInfo() << ": Variable \"path\" is incomplete." << std::endl;
+			std::cerr << value->getLineInfo() << ": Variable \"path\" is incomplete. Please check if all used variables are defined." << std::endl;
 			return false;
 		}
 		this->shell.path = boost::filesystem::path(value->getString(), pcf::path::utf8);
@@ -1291,16 +1299,21 @@ private:
 	 * @param[in] varName - associate string literal to this variable
 	 * @param[in] value - set this value
 	 * @param[in] enableChecking - set to enable checking of referenced variable replacement
+	 * @param[in] warnOnOverwrite - set to warn if the variable already exists within the current scope
 	 * @return true on success, else false
 	 */
-	bool setVariable(const std::string & varName, const pp::StringLiteral & value, const bool enableChecking) {
+	bool setVariable(const std::string & varName, const pp::StringLiteral & value, const bool enableChecking, const bool warnOnOverwrite = false) {
 		VariableHandler::Checking checkLevel = VariableHandler::CHECKING_OFF;
+		boost::optional<VariableMap &> currentScope = this->script.vars.getCurrentScope();
 		if ( enableChecking ) {
 			if ( this->script.config.variableChecking ) {
 				checkLevel = VariableHandler::CHECKING_ERROR;
 			} else {
 				checkLevel = VariableHandler::CHECKING_WARN;
 			}
+		}
+		if (warnOnOverwrite && currentScope && currentScope->find(varName) != currentScope->end()) {
+			std::cerr << value.getLineInfo() << ": Warning: Variable \"" << varName << "\" was already defined and will be replaced by a new value." << std::endl;
 		}
 		return this->script.vars.set(varName, value, checkLevel).isSet();
 	}
@@ -1538,6 +1551,7 @@ private:
 			return false;
 		}
 		output.process = proc->second;
+		output.process.completeDestinationVariables(VariableHandler(vars));
 		output.process.completeCommandVariables(VariableHandler(vars));
 		output.process.config.build = output.process.config.build || fBuild;
 		output.initialInput = input;

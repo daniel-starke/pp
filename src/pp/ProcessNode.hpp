@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-05-01
+ * @version 2016-11-02
  */
 #ifndef __PP_PROCESSNODE_HPP__
 #define __PP_PROCESSNODE_HPP__
@@ -279,9 +279,7 @@ public:
 			if ( ! this->dependency.front().executeChain(callback, boost::phoenix::bind(&ProcessNode::executeParallel, this, callback, callNext)) ) return false;
 		} else if ( ! this->parallel.empty() ) {
 			/* execute parallel nodes */
-			BOOST_FOREACH(ProcessNode & node, this->parallel) {
-				if ( ! node.executeChain(callback, boost::phoenix::bind(&ProcessNode::executeSelf, this, callback, callNext)) ) return false;
-			}
+			if ( ! this->executeParallel(callback, callNext) ) return false;
 		} else if ( this->value ) {
 			/* execute self */
 			switch (this->value->process.getState()) {
@@ -353,11 +351,16 @@ private:
 		if ( ! this->parallel.empty() ) {
 			/* execute parallel nodes */
 			boost::mutex::scoped_lock lock(this->mutex);
+			/* we need to ensure that executeSelf() doesn't exists before we are done queuing all parallel processes */
+			this->parallelInQueue = this->parallel.size();
 			BOOST_FOREACH(ProcessNode & node, this->parallel) {
 				lock.unlock();
-				if ( ! node.executeChain(callback, boost::phoenix::bind(&ProcessNode::executeSelf, this, callback, callNext)) ) return false;
+				if ( ! node.executeChain(callback, boost::phoenix::bind(&ProcessNode::executeSelf, this, callback, callNext)) ) {
+					lock.lock();
+					this->parallelInQueue--;
+					return false;
+				}
 				lock.lock();
-				this->parallelInQueue++;
 			}
 		} else {
 			return this->executeSelf(callback, callNext);

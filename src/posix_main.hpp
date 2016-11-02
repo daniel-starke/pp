@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2014-2016 Daniel Starke
  * @date 2014-03-09
- * @version 2016-05-01
+ * @version 2016-10-28
  */
 #ifndef __POSIX_MAIN_HPP__
 #define __POSIX_MAIN_HPP__
@@ -18,9 +18,6 @@
 #else /* not windows, unicode */
 #define POSIX_ARG_TYPE char
 #endif /* windows, unicode */
-
-
-int main(int argc, char ** argv, char ** enpv);
 
 
 #endif /* __POSIX_MAIN_HPP__ */

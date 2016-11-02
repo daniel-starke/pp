@@ -4,7 +4,6 @@
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-08-04
  * @version 2016-05-01
- * @todo perform multi-threading tests to see if this solution is really thread-safe (ProcessPipe)
  */
 #ifndef __LIBPCFXX_PROCESS_UTILITY_HPP__
 #define __LIBPCFXX_PROCESS_UTILITY_HPP__

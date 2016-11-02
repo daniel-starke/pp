@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-05-01
+ * @version 2016-10-30
  */
 #ifndef __PP_PROCESS_HPP__
 #define __PP_PROCESS_HPP__
@@ -169,6 +169,18 @@ public:
 		boost::mutex::scoped_lock lock(this->mutex);
 		this->transitionsInQueue = 0;
 		this->state = IDLE;
+	}
+	
+	/**
+	 * Completes the internal destination variables by resolving remaining variable references
+	 * using the passed variable handler.
+	 *
+	 * @param[in] vars - variable handle with variables for replacement
+	 */
+	void completeDestinationVariables(const VariableHandler & vars) {
+		BOOST_FOREACH(ProcessBlock & processBlock, this->processBlocks) {
+			processBlock.completeDestinationVariables(vars);
+		}
 	}
 	
 	/**
@@ -598,6 +610,10 @@ public:
 		boost::mutex::scoped_lock lock(this->mutex);
 		if (this->transitionsInQueue > 0) return true; /* execution in progress */
 		if (this->state != IDLE) return true; /* execution in progress */
+		if ( ioService.stopped() ) {
+			this->state = FAILED;
+			return true;
+		}
 		if ( this->transitions.empty() ) {
 			/* nothing to do */
 			this->state = FINISHED;
@@ -761,6 +777,12 @@ private:
 	 * @param[in] callNext - callback function to be executed if all tasks have been done
 	 */
 	void executeTransition(boost::asio::io_service & ioService, ProcessTransition & transition, const ProgressCallback & callProgress, const ExecutionCallback & callNext) {
+		/* early out if I/O service was already canceled */
+		if ( ioService.stopped() ) {
+			boost::mutex::scoped_lock lock(this->mutex);
+			this->state = FAILED;
+			return;
+		}
 		/* check if all needed input files are available */
 		BOOST_FOREACH(const boost::shared_ptr<PathLiteral> & literal, transition.dependency) {
 			/* temporaries can only become missing input if they are forced for creation */
@@ -779,12 +801,23 @@ private:
 		}
 		if ( callProgress ) callProgress(true, static_cast<boost::uint64_t>(transition.commands.size()));
 		/* execution finished */
-		boost::mutex::scoped_lock lock(this->mutex);
-		if (this->transitionsInQueue > 0) this->transitionsInQueue--;
-		if (this->transitionsInQueue <= 0) {
-			this->state = FINISHED;
-			lock.unlock();
-			if ( callNext ) callNext();
+		{
+			boost::mutex::scoped_lock lock(this->mutex);
+			/* early out if I/O service was already canceled */
+			if ( ioService.stopped() ) {
+				if (this->transitionsInQueue > 0) {
+					this->state = FAILED;
+				} else {
+					this->state = FINISHED;
+				}
+				return;
+			}
+			if (this->transitionsInQueue > 0) this->transitionsInQueue--;
+			if (this->transitionsInQueue <= 0) {
+				this->state = FINISHED;
+				lock.unlock();
+				if (callNext ) callNext();
+			}
 		}
 	}
 };

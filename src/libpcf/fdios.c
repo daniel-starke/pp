@@ -1,9 +1,9 @@
 /**
  * @file fdios.c
  * @author Daniel Starke
- * @copyright Copyright 2015-2016 Daniel Starke
+ * @copyright Copyright 2016 Daniel Starke
  * @see fdios.h
- * @date 2015-02-15
+ * @date 2016-10-26
  */
 #define _POSIX_C_SOURCE 199309L
 #include <stdlib.h>
