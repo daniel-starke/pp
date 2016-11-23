@@ -3,14 +3,16 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-10-31
- * @version 2016-11-01
+ * @version 2016-11-23
  */
 #ifndef __PP_PARSER_SCRIPT_HPP__
 #define __PP_PARSER_SCRIPT_HPP__
 
 
 #include <set>
+#include <sstream>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/assign/list_of.hpp>
 #include <boost/config/warning_disable.hpp>
 #include <boost/foreach.hpp>
 #include <boost/locale.hpp>
@@ -185,6 +187,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 	qi::rule<Iterator, pp::Process *(), Skipper> processPragmaInclude;
 	qi::rule<Iterator, pp::Process(), Skipper> process;
 	qi::rule<Iterator, void(pp::StringLiteralVector &, bool &), Skipper> processParameterList;
+	qi::rule<Iterator, pp::ProcessNode(), qi::locals<std::string /* _a */, bool /* _b */>, Skipper> executionElement;
 	qi::rule<
 		Iterator,
 		pp::ProcessElement(),
@@ -377,6 +380,8 @@ struct Script : qi::grammar<Iterator, Skipper> {
 			uint_[_val = _1] | idString[_pass = phx::bind<bool>(&Script::getVariableAsNum<size_t>, this, _val, _1)]
 		);
 		
+		/* @param[in] _r1 - enable captures
+		 * @param[in] _r2 - quoting character */
 		stringLiteral.name("string literal");
 		stringLiteral = (
 			stringLiteralGrammar(
@@ -385,7 +390,8 @@ struct Script : qi::grammar<Iterator, Skipper> {
 					val(pp::StringLiteral::ENABLE_CAPTURES),
 					val(pp::StringLiteral::STANDARD)
 				),
-				construct<boost::optional<char> >(_r2)
+				construct<boost::optional<char> >(_r2),
+				ref(this->script.config.fullRecursiveMatch)
 			)
 		);
 		
@@ -649,6 +655,14 @@ struct Script : qi::grammar<Iterator, Skipper> {
 			)
 		);
 		
+		executionElement.name("execution element");
+		executionElement = (
+			omit[
+				   -(forceBuild[_b = val(true)])
+				>> executionId[_a = _1]
+			][_pass = phx::bind<bool>(&Script::setExecutionElement, this, _val, _a, _b)]
+		);
+		
 		processElement.name("process element");
 		processElement = (
 			omit[
@@ -667,7 +681,8 @@ struct Script : qi::grammar<Iterator, Skipper> {
 		
 		pnLeaf.name("process chain element");
 		pnLeaf = (
-			processElement[phx::bind(&Script::setLeafProcess, _val, _1)]
+			  executionElement[phx::bind(&Script::setProcessParallel, _val, _1)]
+			| processElement[phx::bind(&Script::setLeafProcess, _val, _1)]
 		);
 		
 		pnParallel.name("parallel process group");
@@ -712,7 +727,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 			lexeme[pragmaPrefix >> l_else],              /* else */
 			omit[char_],                                 /* block-skipper (handles skip grammar too) */
 			pragmaEnd.alias()                            /* end */
-		)[executionExpression(_r1)];                     /* block */
+		)[*(executionExpression(_r1))];                  /* block */
 		
 		executionExpression.name("pragma or process chain");
 		executionExpression = (
@@ -739,7 +754,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 			lexeme[pragmaPrefix >> l_else],              /* else */
 			omit[char_],                                 /* block-skipper (handles skip grammar too) */
 			pragmaEnd.alias()                            /* end */
-		)[globalExpression.alias()];                     /* block */
+		)[*globalExpression];                            /* block */
 		
 		globalExpression.name("pragma, variable assignment, variable removal, process or execution");
 		globalExpression = (
@@ -1038,6 +1053,12 @@ private:
 	 * @return true on success, else false
 	 */
 	bool defShellParameters(const Iterator & it) {
+		const static std::map<std::string, pp::Shell::Encoding> encodings = boost::assign::map_list_of
+			("utf8",   pp::Shell::UTF8)
+			("utf-8",  pp::Shell::UTF8)
+			("utf16",  pp::Shell::UTF16)
+			("utf-16", pp::Shell::UTF16)
+		;
 		const boost::spirit::classic::file_position_base<std::string> & pos = it.get_position();
 		const pp::LineInfo scriptPos(pos.file, static_cast<size_t>(pos.line), static_cast<size_t>(pos.column));
 		boost::optional<pp::StringLiteral &> value;
@@ -1096,6 +1117,22 @@ private:
 				}
 			}
 		}
+		/* outputEncoding */
+		value = this->script.vars.get("outputEncoding");
+		if ( value && value->isSet() ) {
+			if ( value->isVariable() ) {
+				std::cerr << value->getLineInfo() << ": Variable \"outputEncoding\" is incomplete." << std::endl;
+				return false;
+			}
+			std::map<std::string, pp::Shell::Encoding>::const_iterator encoding = encodings.find(boost::locale::to_lower(value->getString()));
+			if (encoding == encodings.end()) {
+				std::cerr << value->getLineInfo() << ": Given value for \"outputEncoding\" is invalid." << std::endl;
+				return false;
+			}
+			this->shell.outputEncoding = encoding->second;
+		} else {
+			this->shell.outputEncoding = Shell::UTF8;
+		}
 #if defined(PCF_IS_WIN)
 		/* raw */
 		value = this->script.vars.get("raw");
@@ -1106,16 +1143,18 @@ private:
 			}
 			try {
 				this->shell.raw = pcf::string::toBool(value->getString());
-			} catch (const pcf::exception::InvalidValue & e) {
+			} catch (const pcf::exception::InvalidValue &) {
 				std::cerr << value->getLineInfo() << ": Given value for \"raw\" is not a boolean." << std::endl;
 				return false;
 			}
+		} else {
+			this->shell.raw = false;
 		}
 #else /* not Windows */
 		this->shell.raw = false;
 #endif /* Windows */
 		/* set new shell (overwrite old one if already set) */
-		this->script.shells[this->shellName] = this->shell;
+		this->script.shells[this->shellName] = boost::make_shared<Shell>(this->shell);
 		return true;
 	}
 	
@@ -1127,9 +1166,9 @@ private:
 	 * @return true on success, else false
 	 */
 	bool useShell(const std::string & str, const Iterator & it) {
-		const boost::spirit::classic::file_position_base<std::string> & pos = it.get_position();
-		const pp::LineInfo scriptPos(pos.file, static_cast<size_t>(pos.line), static_cast<size_t>(pos.column));
-		if (this->script.shells.count(str) < 1) {
+		if (this->script.shells.find(str) == this->script.shells.end()) {
+			const boost::spirit::classic::file_position_base<std::string> & pos = it.get_position();
+			const pp::LineInfo scriptPos(pos.file, static_cast<size_t>(pos.line), static_cast<size_t>(pos.column));
 			std::cerr << scriptPos << ": Given shell was not defined: " << str << std::endl;
 			return false;
 		}
@@ -1151,6 +1190,8 @@ private:
 			const boost::spirit::classic::file_position_base<std::string> & pos = it.get_position();
 			const pp::LineInfo scriptPos(pos.file, static_cast<size_t>(pos.line), static_cast<size_t>(pos.column));
 			const boost::optional<pp::StringLiteral &> varVal = this->script.vars.get(var);
+			std::string verbosityStr = boost::locale::to_lower(boost::lexical_cast<std::string>(verbosity));
+			if ( ! verbosityStr.empty() ) verbosityStr[0] = static_cast<char>(::toupper(verbosityStr[0]));
 			if ( ! varVal ) {
 				if ( this->script.config.variableChecking ) {
 					BOOST_THROW_EXCEPTION(
@@ -1162,7 +1203,20 @@ private:
 				}
 				return;
 			}
-			std::cerr << scriptPos << ":" << boost::locale::to_lower(boost::lexical_cast<std::string>(verbosity)) << ": " << varVal->getVarString() << std::endl;
+			switch (verbosity) {
+			case VERBOSITY_INFO:
+				std::cout << scriptPos << ": " << verbosityStr << ": " << varVal->getVarString() << std::endl;
+				break;
+			case VERBOSITY_ERROR:
+				BOOST_THROW_EXCEPTION(
+					pcf::exception::Script()
+					<< pcf::exception::tag::Message(boost::lexical_cast<std::string>(scriptPos) + ": Error: " + varVal->getVarString())
+				);
+				break;
+			default:
+				std::cerr << scriptPos << ": " << verbosityStr << ": " << varVal->getVarString() << std::endl;
+				break;
+			}
 		}
 	}
 	
@@ -1179,7 +1233,22 @@ private:
 		if ( ! (this->script.config.verbosity < verbosity) ) {
 			const boost::spirit::classic::file_position_base<std::string> & pos = it.get_position();
 			const pp::LineInfo scriptPos(pos.file, static_cast<size_t>(pos.line), static_cast<size_t>(pos.column));
-			std::cerr << scriptPos << ":" << boost::locale::to_lower(boost::lexical_cast<std::string>(verbosity)) << ": " << literal.getString() << std::endl;
+			std::string verbosityStr = boost::locale::to_lower(boost::lexical_cast<std::string>(verbosity));
+			if ( ! verbosityStr.empty() ) verbosityStr[0] = static_cast<char>(::toupper(verbosityStr[0]));
+			switch (verbosity) {
+			case VERBOSITY_INFO:
+				std::cout << scriptPos << ": " << verbosityStr << ": " << literal.getVarString() << std::endl;
+				break;
+			case VERBOSITY_ERROR:
+				BOOST_THROW_EXCEPTION(
+					pcf::exception::Script()
+					<< pcf::exception::tag::Message(boost::lexical_cast<std::string>(scriptPos) + ": Error: " + literal.getVarString())
+				);
+				break;
+			default:
+				std::cerr << scriptPos << ": " << verbosityStr << ": " << literal.getVarString() << std::endl;
+				break;
+			}
 		}
 	}
 	
@@ -1196,18 +1265,34 @@ private:
 			const boost::spirit::classic::file_position_base<std::string> & pos = it.get_position();
 			const pp::LineInfo scriptPos(pos.file, static_cast<size_t>(pos.line), static_cast<size_t>(pos.column));
 			const pp::VariableScopes & varScopes(this->script.vars.getScopes());
+			std::string verbosityStr = boost::locale::to_lower(boost::lexical_cast<std::string>(verbosity));
+			if ( ! verbosityStr.empty() ) verbosityStr[0] = static_cast<char>(::toupper(verbosityStr[0]));
 			std::set<std::string> printed; /* exclude already printed variables */
+			std::ostringstream sout;
 			BOOST_FOREACH(const pp::VariableMap & map, varScopes) {
 				BOOST_FOREACH(const pp::VariableMap::value_type & pair, map) {
 					if (printed.find(pair.first) == printed.end()) {
 						const boost::optional<pp::StringLiteral &> varVal = this->script.vars.get(pair.first);
 						if ( varVal ) {
 							printed.insert(pair.first);
-							std::cerr << scriptPos << ":" << boost::locale::to_lower(boost::lexical_cast<std::string>(verbosity))
-								<< ": " << pair.first << " = \"" << varVal->getVarString() << '"' << std::endl;
+							sout << scriptPos << ": " << verbosityStr << ": " << pair.first << " = \"" << varVal->getVarString() << '"' << std::endl;
 						}
 					}
 				}
+			}
+			switch (verbosity) {
+			case VERBOSITY_INFO:
+				std::cout << sout.str();
+				break;
+			case VERBOSITY_ERROR:
+				BOOST_THROW_EXCEPTION(
+					pcf::exception::Script()
+					<< pcf::exception::tag::Message(sout.str())
+				);
+				break;
+			default:
+				std::cerr << sout.str();
+				break;
 			}
 		}
 	}
@@ -1438,7 +1523,7 @@ private:
 	bool addVariableToCurrentScope(const std::string & varName, const bool enableChecking) {
 		boost::optional<pp::StringLiteral &> var = this->script.vars.get(varName);
 		if (( ! var ) || var->isSet() == false) {
-			std::cerr << "Warning: Trying to access unknown variable \"" + varName + "\"." << std::endl;
+			std::cerr << "Warning: Trying to access unknown variable \"" << varName << "\"." << std::endl;
 			return false;
 		}
 		(*(this->script.vars.getCurrentScope()))[varName] = *var;
@@ -1523,6 +1608,37 @@ private:
 	 */
 	static void setExecutionId(Execution & exec, const std::string & id) {
 		exec.id = id;
+	}
+	
+	/**
+	 * Callback function to set the build flag to true for a given process node.
+	 *
+	 * @param[in,out] element - set build flag for this process
+	 * @param[in] level - hierarchical level of the given process node with the dependency tree
+	 * @return true on success, else false
+	 */
+	static bool setBuildFlag(ProcessNode::ValueType & element, const size_t /* level */) {
+		element.process.config.build = true;
+		return true;
+	}
+	
+	/**
+	 * Sets the given values to the referenced process node.
+	 *
+	 * @param[in,out] output - set values for this process node
+	 * @param[in] id - copy execution with this ID
+	 * @param[in] fBuild - set to true to force build of this process node
+	 * @return true on success, else false
+	 */
+	bool setExecutionElement(ProcessNode & output, const std::string & id, const bool fBuild) {
+		ExecutionMap::const_iterator target = this->script.targets.find(id);
+		if (target == this->script.targets.end()) return false; /* no error; may be a process ID instead */
+		output.parallel = target->second.processes;
+		if ( fBuild ) {
+			/* force build for all nodes */
+			output.traverseTopDown(Script::setBuildFlag);
+		}
+		return true;
 	}
 	
 	/**

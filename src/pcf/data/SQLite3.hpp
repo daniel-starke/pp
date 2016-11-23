@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2014-2016 Daniel Starke
  * @date 2014-01-23
- * @version 2016-05-01
+ * @version 2016-11-20
  */
 #ifndef __LIBPCFXX_DATA_SQLITE3_HPP__
 #define __LIBPCFXX_DATA_SQLITE3_HPP__
@@ -316,7 +316,7 @@ public:
 		 *
 		 * @return true if the SQL statement completed, else false
 		 */
-		bool operator ()() {
+		bool operator() () {
 			if ( this->needReset ) this->reset();
 			const int result = sqlite3_step(this->statement);
 			this->needReset = true;
@@ -341,7 +341,7 @@ public:
 		 * @param[in] value - blob data
 		 * @return reference on own object for chaining
 		 */
-		Statement & operator <<(const pcf::data::OctetBlock & value) {
+		Statement & operator<< (const pcf::data::OctetBlock & value) {
 			this->bind(value);
 			return *this;
 		}
@@ -352,7 +352,7 @@ public:
 		 * @param[in] value - bool value
 		 * @return reference on own object for chaining
 		 */
-		Statement & operator <<(const bool value) {
+		Statement & operator<< (const bool value) {
 			this->bind(value);
 			return *this;
 		}
@@ -363,7 +363,7 @@ public:
 		 * @param[in] value - double value
 		 * @return reference on own object for chaining
 		 */
-		Statement & operator <<(const double value) {
+		Statement & operator<< (const double value) {
 			this->bind(value);
 			return *this;
 		}
@@ -374,7 +374,7 @@ public:
 		 * @param[in] value - int value
 		 * @return reference on own object for chaining
 		 */
-		Statement & operator <<(const int value) {
+		Statement & operator<< (const int value) {
 			this->bind(value);
 			return *this;
 		}
@@ -385,7 +385,7 @@ public:
 		 * @param[in] value - int64_t value
 		 * @return reference on own object for chaining
 		 */
-		Statement & operator <<(const boost::int64_t value) {
+		Statement & operator<< (const boost::int64_t value) {
 			this->bind(value);
 			return *this;
 		}
@@ -396,7 +396,7 @@ public:
 		 * @param[in] value - string value
 		 * @return reference on own object for chaining
 		 */
-		Statement & operator <<(const std::string & value) {
+		Statement & operator<< (const std::string & value) {
 			this->bind(value);
 			return *this;
 		}
@@ -407,7 +407,7 @@ public:
 		 * @param[in] value - wstring value
 		 * @return reference on own object for chaining
 		 */
-		Statement & operator <<(const std::wstring & value) {
+		Statement & operator<< (const std::wstring & value) {
 			this->bind(value);
 			return *this;
 		}
@@ -418,7 +418,7 @@ public:
 		 * @param[in] value - control value for NULL binding
 		 * @return reference on own object for chaining
 		 */
-		Statement & operator <<(const SQLite3::tag_null & /* value */) {
+		Statement & operator<< (const SQLite3::tag_null & /* value */) {
 			this->bindNull();
 			return *this;
 		}
@@ -431,7 +431,7 @@ public:
 		 * @param[in] value - control value for reset
 		 * @return reference on own object for chaining
 		 */
-		Statement & operator <<(const SQLite3::tag_reset & /* value */) {
+		Statement & operator<< (const SQLite3::tag_reset & /* value */) {
 			this->reset();
 			return *this;
 		}
@@ -690,7 +690,7 @@ public:
 		 *
 		 * @return true if the SQL statement completed, else false
 		 */
-		bool operator()() {
+		bool operator() () {
 			return this->statement();
 		}
 		
@@ -700,7 +700,7 @@ public:
 		 * @param[in] value - blob data
 		 * @return reference on own object for chaining
 		 */
-		ScopedStatement & operator <<(const pcf::data::OctetBlock & value) {
+		ScopedStatement & operator<< (const pcf::data::OctetBlock & value) {
 			this->bind(value);
 			return *this;
 		}
@@ -711,7 +711,7 @@ public:
 		 * @param[in] value - bool value
 		 * @return reference on own object for chaining
 		 */
-		ScopedStatement & operator <<(const bool value) {
+		ScopedStatement & operator<< (const bool value) {
 			this->bind(value);
 			return *this;
 		}
@@ -722,7 +722,7 @@ public:
 		 * @param[in] value - double value
 		 * @return reference on own object for chaining
 		 */
-		ScopedStatement & operator <<(const double value) {
+		ScopedStatement & operator<< (const double value) {
 			this->bind(value);
 			return *this;
 		}
@@ -733,7 +733,7 @@ public:
 		 * @param[in] value - int value
 		 * @return reference on own object for chaining
 		 */
-		ScopedStatement & operator <<(const int value) {
+		ScopedStatement & operator<< (const int value) {
 			this->bind(value);
 			return *this;
 		}
@@ -744,7 +744,7 @@ public:
 		 * @param[in] value - int64_t value
 		 * @return reference on own object for chaining
 		 */
-		ScopedStatement & operator <<(const boost::int64_t value) {
+		ScopedStatement & operator<< (const boost::int64_t value) {
 			this->bind(value);
 			return *this;
 		}
@@ -755,7 +755,7 @@ public:
 		 * @param[in] value - string value
 		 * @return reference on own object for chaining
 		 */
-		ScopedStatement & operator <<(const std::string & value) {
+		ScopedStatement & operator<< (const std::string & value) {
 			this->bind(value);
 			return *this;
 		}
@@ -766,7 +766,7 @@ public:
 		 * @param[in] value - wstring value
 		 * @return reference on own object for chaining
 		 */
-		ScopedStatement & operator <<(const std::wstring & value) {
+		ScopedStatement & operator<< (const std::wstring & value) {
 			this->bind(value);
 			return *this;
 		}
@@ -777,7 +777,7 @@ public:
 		 * @param[in] value - control value for NULL binding
 		 * @return reference on own object for chaining
 		 */
-		ScopedStatement & operator <<(const SQLite3::tag_null & /* value */) {
+		ScopedStatement & operator<< (const SQLite3::tag_null & /* value */) {
 			this->bindNull();
 			return *this;
 		}
@@ -790,7 +790,7 @@ public:
 		 * @param[in] value - control value for reset
 		 * @return reference on own object for chaining
 		 */
-		ScopedStatement & operator <<(const SQLite3::tag_reset & /* value */) {
+		ScopedStatement & operator<< (const SQLite3::tag_reset & /* value */) {
 			this->reset();
 			return *this;
 		}
@@ -1015,7 +1015,7 @@ public:
 	 * The transaction needs to be closed with SQLite3::commit().
 	 *
 	 * @return true if completed successfully, else false
-	 * @see Statement::operator()()
+	 * @see Statement::operator() ()
 	 */
 	bool beginTransaction() {
 		return (*(this->beginTransactionStmt))();
@@ -1025,7 +1025,7 @@ public:
 	 * Performs a commit on the database.
 	 *
 	 * @return true if completed successfully, else false
-	 * @see Statement::operator()()
+	 * @see Statement::operator() ()
 	 */
 	bool commit() {
 		return (*(this->commitStmt))();
@@ -1035,7 +1035,7 @@ public:
 	 * Performs a rollback on the database.
 	 *
 	 * @return true if completed successfully, else false
-	 * @see Statement::operator()()
+	 * @see Statement::operator() ()
 	 */
 	bool rollback() {
 		return (*(this->rollbackStmt))();

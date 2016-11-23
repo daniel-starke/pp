@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-24
- * @version 2016-10-30
+ * @version 2016-11-19
  */
 #include <cstdlib>
 #include <iostream>
@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/asio.hpp>
 /* workaround for boost::phoenix::bind and boost::bind namespace collision */
@@ -110,7 +111,7 @@ int posix_main(int argc, POSIX_ARG_TYPE ** argv, POSIX_ARG_TYPE ** enpv) {
 			("license", "")
 			("print-only,n", po::value<bool>(&printOnly)->default_value(false)->implicit_value(true)->zero_tokens(), "")
 			("positional-parameter", po::_U(value)< vector<_U(string)> >()->multitoken()->zero_tokens(), "")
-			("verbosity,v", po::value<string>(&verbosity)->default_value(string("INFO")), "")
+			("verbosity,v", po::value<string>(&verbosity)->default_value(string("WARN")), "")
 		;
 		descRemain.add("positional-parameter", -1);
 		po::store(
@@ -188,6 +189,10 @@ int posix_main(int argc, POSIX_ARG_TYPE ** argv, POSIX_ARG_TYPE ** enpv) {
 			sout.imbue(std::locale(cout.getloc(), dateFacet));
 			sout << now;
 			envVarMap[pp::Script::preDefPrefix + "DATE"] = pp::StringLiteral(sout.str(), pp::Script::preDefLocation, pp::StringLiteral::RAW);
+			sout.str(string());
+			sout << jobs;
+			envVarMap[pp::Script::preDefPrefix + "THREADS"] = pp::StringLiteral(sout.str(), pp::Script::preDefLocation, pp::StringLiteral::RAW);
+			envVarMap[pp::Script::preDefPrefix + "TARGETS"] = pp::StringLiteral(boost::algorithm::join(targetList, ","), pp::Script::preDefLocation, pp::StringLiteral::RAW);
 		}
 
 		/* execute script */
@@ -211,57 +216,64 @@ int posix_main(int argc, POSIX_ARG_TYPE ** argv, POSIX_ARG_TYPE ** enpv) {
 		config.verbosity = boost::lexical_cast<pp::Verbosity>(verbosity);
 		config.shell = "default";
 		
-		pp::Script script(config, vars);
+		pp::Script script(config, vars, jobs);
 		/* parse script file (might throw an exception) */
 		script.setProgressFormat("%dY-%dM-%dD %lH:%lM:%lS: %c / %t commands executed, %p%%, ETA %re\n"); /* default format string */
 		script.read(scriptFile);
 		config.verbosity = script.getVerbosity(); /* get updated verbosity level */
 		const bool printOnlyFlag = config.printOnly;
-		bool successfullyPrepared = true;
-		
-		/* prepare parallel tasks (might throw an exception) */
-		BOOST_FOREACH(const string & target, targetList) {
-			if ( ! script.prepare(target) ) successfullyPrepared = false;
-		}
-		
-		/* initialize workers */
+		bool isFirst = true;
+		volatile bool stopped = false;
 		boost::asio::io_service ioService;
-		boost::scoped_ptr<boost::asio::io_service::work> workNotifier(new boost::asio::io_service::work(ioService));
-		pcf::os::BackgroundSignalHandler signals(boost::bind(&terminate, boost::ref(ioService), boost::ref(workNotifier)), SIGINT, SIGTERM);
-		boost::thread_group workerThreads;
-		if ( ! printOnlyFlag ) {
-			/* start execution jobs */
-			if (config.verbosity >= pp::VERBOSITY_INFO) cout << "pp: starting " << jobs << " worker threads" << endl;
-			for (size_t job = 1; job <= jobs; job++) {
-				workerThreads.create_thread(
-					boost::bind(&boost::asio::io_service::run, &ioService)
-				);
-			}
-			signals.asyncWaitForSignal();
-			if (config.verbosity >= pp::VERBOSITY_INFO) cout << "pp: finished starting worker threads" << endl;
-		}
+		boost::scoped_ptr<boost::asio::io_service::work> workNotifier;
+		pcf::os::BackgroundSignalHandler signals(
+			boost::bind(&terminate, boost::ref(ioService), boost::ref(workNotifier), boost::ref(stopped), config.verbosity >= pp::VERBOSITY_DEBUG),
+			SIGINT,
+			SIGTERM
+		);
+		signals.asyncWaitForSignal();
 		
-		/* perform parallel tasks */
-		if ( successfullyPrepared ) {
-			BOOST_FOREACH(const string & target, targetList) {
-				script.execute(target, ioService);
+		/* process targets from command-line */
+		BOOST_FOREACH(const string & target, targetList) {
+			bool successfullyPrepared = true;
+			
+			/* prepare parallel tasks (might throw an exception) */
+			if ( ! script.prepare(target) ) successfullyPrepared = false;
+			
+			/* initialize workers */
+			ioService.reset();
+			workNotifier.reset(new boost::asio::io_service::work(ioService));
+			boost::thread_group workerThreads;
+			if (( ! printOnlyFlag) || successfullyPrepared) {
+				/* start execution jobs */
+				if (config.verbosity >= pp::VERBOSITY_DEBUG) cerr << "pp: starting " << jobs << " worker threads" << endl;
+				for (size_t job = 1; job <= jobs; job++) {
+					workerThreads.create_thread(
+						boost::bind(&boost::asio::io_service::run, &ioService)
+					);
+				}
+				if (config.verbosity >= pp::VERBOSITY_DEBUG) cerr << "pp: finished starting worker threads" << endl;
 			}
-		}
-		
-		/* wait until workers are done */
-		workNotifier.reset();
-		if ( ! printOnlyFlag ) {
-			if (config.verbosity >= pp::VERBOSITY_INFO) cout << "pp: waiting for worker threads to finish" << endl;
-			workerThreads.join_all();
-			signals.cancel();
-			if (config.verbosity >= pp::VERBOSITY_INFO) cout << "pp: all workers finished" << endl;
-			if ( successfullyPrepared ) {
-				bool isFirst = true;
-				BOOST_FOREACH(const string & target, targetList) {
+			
+			/* perform parallel tasks */
+			if ( successfullyPrepared ) script.execute(target, ioService);
+			
+			/* wait until workers are done */
+			workNotifier.reset();
+			if (( ! printOnlyFlag) || successfullyPrepared) {
+				if (config.verbosity >= pp::VERBOSITY_DEBUG) cerr << "pp: waiting for worker threads to finish" << endl;
+				workerThreads.join_all();
+				if (config.verbosity >= pp::VERBOSITY_DEBUG) cerr << "pp: all workers finished" << endl;
+				if ( successfullyPrepared ) {
 					script.complete(target, isFirst);
 				}
 			}
+			
+			/* handle execution termination via signal */
+			if ( stopped ) break;
 		}
+		
+		signals.cancel();
 	} catch (const pcf::exception::Script & e) {
 		if (const string * errMsg = boost::get_error_info<pcf::exception::tag::Message>(e)) {
 			cerr << *errMsg << endl;
@@ -302,13 +314,16 @@ int posix_main(int argc, POSIX_ARG_TYPE ** argv, POSIX_ARG_TYPE ** enpv) {
  *
  * @param[in,out] ios - I/O service to stop
  * @param[in,out] wn - worker notifier to clear
+ * @param[out] stopped - set to true if execution was stopped
+ * @param[in] outputInfo - set true to output info on termination to stderr
  */
-void terminate(boost::asio::io_service & ios, boost::scoped_ptr<boost::asio::io_service::work> & wn) {
+void terminate(boost::asio::io_service & ios, boost::scoped_ptr<boost::asio::io_service::work> & wn, volatile bool & stopped, const bool outputInfo) {
 	static volatile size_t num(0);
 	if (num++ <= 0) {
+		stopped = true;
 		wn.reset();
 		ios.stop();
-		cerr << "pp: terminating execution" << endl;
+		if ( outputInfo ) cerr << "pp: terminating execution" << endl;
 	}
 }
 
@@ -337,11 +352,11 @@ void printHelp() {
 	" -n, --print-only\n"
 	"  Only prints the commands that would had been executed.\n"
 	" -v, --verbosity <enumeration>\n"
-	"  Sets the verbosity level. Default is INFO.\n"
+	"  Sets the verbosity level. Default is WARN.\n"
 	"  Possible values are ERROR, WARN, INFO and DEBUG.\n"
 	"\n"
 	"target\n"
-	"  Execute these targets.\n"
+	"  Execute these targets in sequence.\n"
 	"  The default target is \"default\".\n"
 	"\n"
 	"variable=value\n"

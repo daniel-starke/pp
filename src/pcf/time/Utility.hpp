@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2014-2016 Daniel Starke
  * @date 2014-09-28
- * @version 2016-11-02
+ * @version 2016-11-20
  */
 #ifndef __LIBPCFXX_TIME_UTILITY_HPP__
 #define __LIBPCFXX_TIME_UTILITY_HPP__
@@ -107,7 +107,7 @@ public:
 	 * @param[in] o - object to assign
 	 * @return reference to this object
 	 */
-	BasicProgressClock & operator =(const BasicProgressClock & o) {
+	BasicProgressClock & operator= (const BasicProgressClock & o) {
 		if (this != &o) {
 			this->current = o.current;
 			this->total = o.total;

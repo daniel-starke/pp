@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-08-09
- * @version 2016-05-01
+ * @version 2016-11-20
  */
 #include <map>
 #include <string>
@@ -23,7 +23,7 @@ namespace pp {
  * @return reference to this object for chained operations
  * @throws pcf::exception::InvalidValue on invalid string value
  */
-std::istream & operator >>(std::istream & in, Verbosity & out) {
+std::istream & operator>> (std::istream & in, Verbosity & out) {
 	static const std::map<std::string, Verbosity> mapping = boost::assign::map_list_of
 		("ERROR", VERBOSITY_ERROR)
 		("WARN",  VERBOSITY_WARN)
@@ -52,7 +52,7 @@ std::istream & operator >>(std::istream & in, Verbosity & out) {
  * @param[in] in - convert this verbosity value
  * @return reference to this object for chained operations
  */
-std::ostream & operator <<(std::ostream & out, const Verbosity in) {
+std::ostream & operator<< (std::ostream & out, const Verbosity in) {
 	static const char * mapper[] = {
 		"ERROR",
 		"WARN",
@@ -64,6 +64,7 @@ std::ostream & operator <<(std::ostream & out, const Verbosity in) {
 }
 
 
+#ifndef _MSC_VER
 /**
  * Compares two verbosity levels whereas the lowest is VERBOSITY_ERROR.
  *
@@ -71,9 +72,18 @@ std::ostream & operator <<(std::ostream & out, const Verbosity in) {
  * @param[in] rhs - right hand side
  * @return true if lhs < rhs, else false
  */
-bool operator <(const Verbosity lhs, const Verbosity rhs) {
+bool operator< (const Verbosity lhs, const Verbosity rhs) {
 	return static_cast<unsigned int>(lhs) < static_cast<unsigned int>(rhs);
 }
+#endif
+
+
+/** Mapping for the transition reasons to strings. */
+const char ProcessTransition::reasonMap[3][2] = {
+	{' ', 'F'},
+	{' ', 'M'},
+	{' ', 'C'}
+};
 
 
 } /* namespace pp */

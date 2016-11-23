@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-11-27
- * @version 2016-05-01
+ * @version 2016-11-20
  * @brief Enables single skip parser invocation as gap and gap(p) for explicit skipping.
  * @remarks Extension to the Boost Spirit2 parser framework.
  * @remarks Only works within a disabled skipper context (e.g. within lexeme[]) or within phrase_parse if
@@ -145,7 +145,7 @@ struct gapParamPrimitive : boost::spirit::qi::primitive_parser<gapParamPrimitive
 	}
 private:
 	/** silence MSVC warning C4512: assignment operator could not be generated */
-	gapParamPrimitive & operator =(const gapParamPrimitive &);
+	gapParamPrimitive & operator= (const gapParamPrimitive &);
 };
 
 
@@ -167,7 +167,7 @@ struct make_primitive<pcf::parser::spirit::tag::gap, Modifiers> {
 	typedef pcf::parser::spirit::detail::GapPrimitive result_type;
 	
 	/** this is the factory function object invoked in order to create an instance of the GapPrimitive */
-	result_type operator ()(unused_type, unused_type) const {
+	result_type operator() (unused_type, unused_type) const {
 		return result_type();
 	}
 };
@@ -184,7 +184,7 @@ struct make_primitive<terminal_ex<pcf::parser::spirit::tag::gap, fusion::vector1
 	
 	/** this is the factory function object invoked in order to create an instance of the gapParamPrimitive */
 	template <typename Terminal>
-	result_type operator ()(const Terminal & term, const Modifiers & modifiers) const {
+	result_type operator() (const Terminal & term, const Modifiers & modifiers) const {
 		return result_type(compile<qi::domain>(fusion::at_c<0>(term.args), modifiers));
 	}
 };

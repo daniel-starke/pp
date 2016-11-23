@@ -4,9 +4,9 @@
  * @copyright Copyright 2015-2016 Daniel Starke
  * @see fdio.h
  * @date 2015-02-28
- * @version 2016-10-29
+ * @version 2016-11-13
  */
-#define _POSIX_C_SOURCE 199309L
+#define _POSIX_C_SOURCE 200809L
 #include <stdlib.h>
 #include <libpcf/target.h>
 #include <libpcf/fdio.h>
@@ -101,17 +101,9 @@ int fdio_closeNonDefFds() {
 			if (de->d_name[0] == '.') continue;
 			errno = 0;
 			l = strtol(de->d_name, &e, 10);
-			if (errno != 0 || !e || *e) {
-				closedir(d);
-				errno = EINVAL;
-				return 0;
-			}
+			if (errno != 0 || !e || *e) continue;
 			fd = (int)l;
-			if (((long)fd) != l) {
-				closedir(d);
-				errno = EINVAL;
-				return 0;
-			}
+			if (((long)fd) != l) continue;
 			if (fd < 3) continue;
 			if (fd == dirfd(d)) continue;
 			close(fd);
@@ -124,7 +116,7 @@ int fdio_closeNonDefFds() {
 		for (i = 3; i < maxFd; i++) close(i);
 	}
 	return 1;
-#endif /* !HAS_CLOSEFROM */
+#endif /* ! HAS_CLOSEFROM */
 #endif /* ! F_CLOSEM */
 }
 #endif /* ! PCF_IS_WIN */

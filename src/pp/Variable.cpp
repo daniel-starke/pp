@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-27
- * @version 2016-05-01
+ * @version 2016-11-23
  */
 #include <algorithm>
 #include <fstream>
@@ -66,6 +66,7 @@ bool operator== (const pp::StringLiteralFunctionPair & lh, const pp::StringLiter
 namespace pp {
 
 
+#ifndef _MSC_VER
 /**
  * Combines two parsing flags.
  *
@@ -91,6 +92,7 @@ StringLiteral::ParsingFlags operator| (const StringLiteral::ParsingFlags lhs, co
 bool operator== (const StringLiteral::ParsingFlags lhs, const StringLiteral::ParsingFlags rhs) {
 	return (static_cast<int>(lhs) & static_cast<int>(rhs)) != 0;
 }
+#endif
 
 
 /**
@@ -133,7 +135,7 @@ boost::optional<VariableMap::value_type> getKeyValuePair(const std::string & str
  * @param[in] li - script location to output
  * @return reference to this object for chained operations
  */
-std::ostream & operator <<(std::ostream & out, const LineInfo & li) {
+std::ostream & operator<< (std::ostream & out, const LineInfo & li) {
 	out << li.file.string(pcf::path::utf8) << ":" << li.line << ":" << li.column;
 	return out;
 }
@@ -146,7 +148,7 @@ std::ostream & operator <<(std::ostream & out, const LineInfo & li) {
  * @param[in] sl - string literal to output
  * @return reference to this object for chained operations
  */
-std::ostream & operator <<(std::ostream & out, const StringLiteral & sl) {
+std::ostream & operator<< (std::ostream & out, const StringLiteral & sl) {
 	out << sl.getString();
 	return out;
 }
@@ -183,6 +185,51 @@ RegExNamedCaptureSet getRegExCaptureNames(const std::string & pattern) {
 
 
 /**
+ * Replaces all referenced variables by using the variables of the given variable handler.
+ * Dynamic variables are not replaced and the given output variable is set with the name of the
+ * variable which was not found for replacement on error.
+ * 
+ * @param[in,out] parts - replace variables in these string literal parts
+ * @param[out] unknownVariable - set with the name of an unknown variable
+ * @param[in] varHandler - use these variables for replacement
+ * @param[in] dynVars - do not replace these variables
+ * @return true on success, else false
+ */
+bool StringLiteral::replaceVariables(StringLiteralList & parts, std::string & unknownVariable, const VariableHandler & varHandler, const DynamicVariableSet & dynVars) {
+	DynamicVariableSet::const_iterator dynNotFound = dynVars.end();
+	boost::optional<const StringLiteral &> var;
+	bool result = true;
+	BOOST_FOREACH(StringLiteralPart & part, parts) {
+		switch (part.type) {
+		case StringLiteralPart::STRING:
+			break; /* no action needed */
+		case StringLiteralPart::VARIABLE:
+			if (dynVars.find(part.value) != dynNotFound) {
+				continue;
+			} else if ( (var = varHandler.get(part.value)) ) {
+				/* replace variable */
+				StringLiteral varLit(*var);
+				result = result && varLit.replaceVariables(unknownVariable, varHandler, dynVars);
+				part.type = StringLiteralPart::SUB;
+				part.sub.clear();
+				BOOST_FOREACH(StringLiteralCapturePair & capture, varLit.literal) {
+					part.sub.splice(part.sub.end(), capture.second);
+				}
+			} else {
+				unknownVariable = part.value;
+				result = false;
+			}
+			break;
+		case StringLiteralPart::SUB:
+			result = result && StringLiteral::replaceVariables(part.sub, unknownVariable, varHandler, dynVars);
+			break;
+		}
+	}
+	return result;
+}
+
+
+/**
  * Replaces all referenced variables by using the variables of the given variable map.
  * Dynamic variables are not replaced and the given output variable is set with the name of the
  * variable which was not found for replacement on error.
@@ -193,58 +240,8 @@ RegExNamedCaptureSet getRegExCaptureNames(const std::string & pattern) {
  * @return true on success, else false
  */
 bool StringLiteral::replaceVariables(std::string & unknownVariable, const VariableMap & vars, const DynamicVariableSet & dynVars) {
-	VariableMap::const_iterator var, varNotFound = vars.end();
-	DynamicVariableSet::const_iterator dynNotFound = dynVars.end();
-	bool result = true;
-	if (this->literal.size() == 1 && this->literal.front().second.size() == 1) {
-		StringLiteralPart & part(this->literal.front().second.front());
-		if (part.type == StringLiteralPart::VARIABLE) {
-			if ( part.functions.empty() ) {
-				if (dynVars.find(part.value) != dynNotFound) {
-					return true;
-				} else if ((var = vars.find(part.value)) != varNotFound) {
-					/* replace whole variable (retain line info) */
-					const LineInfo li(this->lineInfo);
-					this->operator =(var->second);
-					this->lineInfo = li;
-					return true;
-				}
-				unknownVariable = part.value;
-				return false;
-			}
-		} else {
-			return true;
-		}
-	}
-	BOOST_FOREACH(StringLiteralCapturePair & capture, this->literal) {
-		StringLiteralList::iterator part, endPart;
-		do {
-			endPart = capture.second.end();
-			for (part = capture.second.begin(); part != endPart; ++part) {
-				if (part->type == StringLiteralPart::VARIABLE) {
-					if (dynVars.find(part->value) != dynNotFound) {
-						continue;
-					} else if ((var = vars.find(part->value)) != varNotFound) {
-						/* replace variable if available and not variable */
-						if ( var->second.isSet() ) {
-							if ( ( ! part->functions.empty() ) && var->second.isVariable() ) continue;
-							StringLiteralList list = var->second.getFlatVectorForReplacement(part->functions, dynVars.empty());
-							if ( ! list.empty() ) {
-								capture.second.splice(capture.second.erase(part), list);
-							} else {
-								capture.second.erase(part);
-							}
-							break;
-						}
-					}
-					unknownVariable = part->value;
-					result = false;
-				}
-			}
-		} while (part != endPart);
-	}
-	this->flatten();
-	return result;
+	const VariableHandler varHandler(vars);
+	return this->replaceVariables(unknownVariable, varHandler, dynVars);
 }
 
 
@@ -273,59 +270,12 @@ bool StringLiteral::replaceVariables(const VariableMap & vars, const DynamicVari
  * @return true on success, else false
  */
 bool StringLiteral::replaceVariables(std::string & unknownVariable, const VariableHandler & varHandler, const DynamicVariableSet & dynVars) {
-	DynamicVariableSet::const_iterator dynNotFound = dynVars.end();
-	boost::optional<const StringLiteral &> var;
 	bool result = true;
-	if (this->literal.size() == 1 && this->literal.front().second.size() == 1) {
-		StringLiteralPart & part(this->literal.front().second.front());
-		if (part.type == StringLiteralPart::VARIABLE) {
-			if ( part.functions.empty() ) {
-				if (dynVars.find(part.value) != dynNotFound) {
-					return true;
-				} else if ( (var = varHandler.get(part.value)) ) {
-					if ( var ) {
-						/* replace whole variable (retain line info) */
-						const LineInfo li(this->lineInfo);
-						this->operator =(*var);
-						this->lineInfo = li;
-						return true;
-					}
-				}
-				unknownVariable = part.value;
-				return false;
-			}
-		} else {
-			return true;
-		}
-	}
 	BOOST_FOREACH(StringLiteralCapturePair & capture, this->literal) {
-		StringLiteralList::iterator part, endPart;
-		do {
-			endPart = capture.second.end();
-			for (part = capture.second.begin(); part != endPart; ++part) {
-				if (part->type == StringLiteralPart::VARIABLE) {
-					if (dynVars.find(part->value) != dynNotFound) {
-						continue;
-					} else if ( (var = varHandler.get(part->value)) ) {
-						/* replace variable if available and not variable */
-						if (var && var->isSet()) {
-							if ( ( ! part->functions.empty() ) && var->isVariable() ) continue;
-							StringLiteralList list = var->getFlatVectorForReplacement(part->functions, dynVars.empty());
-							if ( ! list.empty() ) {
-								capture.second.splice(capture.second.erase(part), list);
-							} else {
-								capture.second.erase(part);
-							}
-						}
-						break;
-					}
-					unknownVariable = part->value;
-					result = false;
-				}
-			}
-		} while (part != endPart);
+		result = result && StringLiteral::replaceVariables(capture.second, unknownVariable, varHandler, dynVars);
 	}
-	this->flatten();
+	/* reduce number of string literal parts by combining string parts and resolve variable functions */
+	this->fold();
 	return result;
 }
 
@@ -374,6 +324,75 @@ bool StringLiteral::replaceVariables(const VariableHandler & varHandler) {
 
 
 /**
+ * Folds this string literal internally to make comparison possible (normalized AST) and to save memory.
+ */
+void StringLiteral::fold() {
+	BOOST_FOREACH(StringLiteralCapturePair & capture, this->literal) {
+		StringLiteral::fold(capture.second);
+	}
+}
+
+
+/**
+ * Folds this string literal internally to make comparison possible and to save memory.
+ * 
+ * @param[in] segment - string literal part list
+ * @return true if the folded segment is complete (safe to apply functions), false if still variable
+ */
+bool StringLiteral::fold(StringLiteralList & segment) {
+	StringLiteralList::iterator part, endPart;
+	boost::optional<StringLiteralList::iterator> lastPart;
+	bool result = true;
+	for (part = segment.begin(), endPart = segment.end(); part != endPart; ) {
+		switch (part->type) {
+		case StringLiteralPart::STRING:
+			if ( lastPart ) {
+				(*lastPart)->value.append(part->value);
+				part = segment.erase(part);
+				continue;
+			} else {
+				lastPart.reset(part);
+			}
+			break;
+		case StringLiteralPart::VARIABLE:
+			result = false;
+			lastPart.reset();
+			break;
+		case StringLiteralPart::SUB:
+			if ( StringLiteral::fold(part->sub) ) {
+				/* sub segment is complete (should consists of only a single string now) */
+				if (part->sub.size() != 1) {
+					BOOST_THROW_EXCEPTION(
+						pcf::exception::InvalidValue()
+						<< pcf::exception::tag::Message("Broken string literal segment.")
+					);
+					return false;
+				}
+				std::string value(part->sub.front().value);
+				BOOST_FOREACH(const StringLiteralFunctionPair & function, part->functions) {
+					if ( function.second ) function.second(value);
+				}
+				if ( lastPart ) {
+					(*lastPart)->value.append(value);
+					part = segment.erase(part);
+					continue;
+				} else {
+					*part = StringLiteralPart(value, StringLiteralPart::STRING);
+					lastPart.reset(part);
+				}
+			} else {
+				result = false;
+				lastPart.reset();
+			}
+			break;
+		}
+		++part;
+	}
+	return result;
+}
+
+
+/**
  * Sets the string literal value from the given string by parsing it accordingly.
  *
  * @param[in] str - string to parse
@@ -391,12 +410,12 @@ void StringLiteral::setLiteralFromString(const std::string & str, const StringLi
 	posEnd.set_tab_chars(1);
 	
 	std::string key, value;
-	parser::StringLiteral<PosIteratorType> stringLiteralGrammar(parsingFlags, boost::optional<char>(), true);
+	parser::StringLiteral<PosIteratorType> stringLiteralGrammar(parsingFlags, boost::optional<char>(), true, false);
 	StringLiteralCaptureVector attribute;
 	bool result = boost::spirit::qi::parse(
 		posBegin,
 		posEnd,
-		stringLiteralGrammar(parsingFlags, boost::phoenix::construct<boost::optional<char> >()),
+		stringLiteralGrammar(parsingFlags, boost::phoenix::construct<boost::optional<char> >(), false),
 		attribute
 	);
 	if (posBegin != posEnd || result == false) {
@@ -410,57 +429,6 @@ void StringLiteral::setLiteralFromString(const std::string & str, const StringLi
 		this->set = true;
 		this->regexCaptures.clear();
 	}	
-}
-
-
-/**
- * Flattens this string literal internally to make comparison possible and to save memory.
- */
-void StringLiteral::flatten() {
-	BOOST_FOREACH(StringLiteralCapturePair & capture, this->literal) {
-		StringLiteralList::iterator part, endPart;
-		boost::optional<StringLiteralList::iterator> lastPart;
-		endPart = capture.second.end();
-		for (part = capture.second.begin(); part != endPart; ++part) {
-			if (part->type == StringLiteralPart::STRING) {
-				if ( lastPart ) {
-					do {
-						(*lastPart)->value += part->value;
-						part = capture.second.erase(part);
-					} while (part != endPart && part != *lastPart && part->type == StringLiteralPart::STRING);
-					lastPart.reset();
-				} else {
-					lastPart.reset(part);
-				}
-			} else {
-				lastPart.reset();
-			}
-		}
-	}
-}
-
-
-/**
- * Returns a flat vector of string literal parts for internal variable replacement.
- * 
- * @param[in] functions - apply these functions beforehand
- * @param[in] canBeVariable - set to true if the result is still dynamic and not fixed yet
- * @return flat vector of string literal parts
- */
-StringLiteralList StringLiteral::getFlatVectorForReplacement(const StringLiteralFunctionVector & functions, const bool canBeVariable) const {
-	if (functions.empty() || (canBeVariable == false && this->isVariable())) {
-		/* no function or still variable */
-		return this->getFlatVector();
-	}
-	
-	StringLiteralList result;
-	std::string value(this->getString());
-	BOOST_FOREACH(const StringLiteralFunctionPair & function, functions) {
-		if ( function.second ) function.second(value);
-	}
-	result.push_back(StringLiteralPart(value, StringLiteralPart::STRING));
-	
-	return result;
 }
 
 
@@ -550,16 +518,44 @@ void StringLiteral::functionSubstr(std::string & str, const int start, const boo
 	std::wstring wStr(boost::locale::conv::utf_to_utf<wchar_t>(str));
 	size_t sStart, sLen = std::wstring::npos;
 	if ( len ) {
-		if (*len < 0) {
-			sStart = static_cast<size_t>(start - (*len));
-			sLen = static_cast<size_t>(-(*len));
+		int nStart;
+		int nLen = *len;
+		if (nLen < 0) {
+			if (start < 0) {
+				nStart = static_cast<int>(wStr.size()) + start + nLen;
+			} else {
+				nStart = start + nLen;
+			}
+			if (nStart < 0) {
+				sStart = 0;
+				nLen -= nStart;
+				if (nLen > 0) nLen = 0;
+			} else {
+				sStart = static_cast<size_t>(nStart);
+			}
+			sLen = static_cast<size_t>(-nLen);
 		} else {
-			sStart = static_cast<size_t>(start);
-			sLen = static_cast<size_t>(*len);
+			if (start < 0) {
+				nStart = static_cast<int>(wStr.size()) + start;
+				if (nStart < 0) {
+					sStart = 0;
+					nLen += static_cast<int>(wStr.size()) + start;
+					if (nLen < 0) nLen = 0;
+				} else {
+					sStart = static_cast<size_t>(nStart);
+				}
+			} else {
+				sStart = static_cast<size_t>(start);
+			}
+			sLen = static_cast<size_t>(nLen);
 		}
 	} else {
 		if (start < 0) {
-			sStart = static_cast<size_t>(static_cast<int>(wStr.size()) + start);
+			if ((-start) > static_cast<int>(wStr.size())) {
+				sStart = 0;
+			} else {
+				sStart = static_cast<size_t>(static_cast<int>(wStr.size()) + start);
+			}
 		} else {
 			sStart = static_cast<size_t>(start);
 		}
@@ -624,6 +620,63 @@ void StringLiteral::functionExists(std::string & str) {
 
 
 /**
+ * Replacement function to return true if the given path exists using regular expressions or false else.
+ * 
+ * @param[in,out] str - apply function on this string
+ * @param[in] li - line information (position where this function was called)
+ * @param[in] fullRecursiveMatch - set true to match the whole path, false to match only path elements
+ */
+void StringLiteral::functionRExists(std::string & str, const LineInfo & li, const bool fullRecursiveMatch) {
+	std::vector<boost::filesystem::path> pathList;
+	const std::wstring inRegExW(boost::locale::conv::utf_to_utf<wchar_t>(str));
+	try {
+		boost::wregex regex(
+			inRegExW,
+			boost::regex_constants::perl
+#if defined(PCF_IS_WIN)
+			| boost::regex_constants::icase
+#endif /* PCF_IS_WIN */
+		);
+		try {
+			if ( ! pcf::path::getRegexPathList(pathList, inRegExW, fullRecursiveMatch) ) {
+				str = "false";
+				return;
+			}
+		} catch (const boost::regex_error & e) {
+			std::ostringstream sout;
+			sout << li << ": Error: Regular expression '" << str << "' is invalid.\n" << e.what();
+			BOOST_THROW_EXCEPTION(
+				pcf::exception::SyntaxError()
+				<< pcf::exception::tag::Message(sout.str())
+			);
+			str = "false";
+			return;
+		} catch (...) {
+			std::ostringstream sout;
+			sout << li << ": Error: Failed to get path list from regular expression \"" << str << "\".";
+			BOOST_THROW_EXCEPTION(
+				pcf::exception::File()
+				<< pcf::exception::tag::Message(sout.str())
+			);
+			str = "false";
+			return;
+		}
+		
+	} catch (const boost::regex_error & e) {
+		std::ostringstream sout;
+		sout << li << ": Error: Regular expression '" << str << "' is invalid.\n" << e.what();
+		BOOST_THROW_EXCEPTION(
+			pcf::exception::SyntaxError()
+			<< pcf::exception::tag::Message(sout.str())
+		);
+		str = "false";
+		return;
+	}
+	str = pathList.empty() ? "false" : "true";
+}
+
+
+/**
  * Adds the given flags to the path literal.
  *
  * @param[in] val - flags to add
@@ -647,6 +700,7 @@ PathLiteral & PathLiteral::removeFlags(const PathLiteral::Flag val) {
 }
 
 
+#ifndef _MSC_VER
 /**
  * Combines two path literal flags.
  *
@@ -669,6 +723,7 @@ PathLiteral::Flag operator| (const PathLiteral::Flag lhs, const PathLiteral::Fla
 bool operator& (const PathLiteral::Flag lhs, const PathLiteral::Flag rhs) {
 	return (static_cast<int>(lhs) & static_cast<int>(rhs)) == static_cast<int>(rhs);
 }
+#endif
 
 
 } /* namespace pftp */

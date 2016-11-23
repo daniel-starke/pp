@@ -1,3 +1,37 @@
+1.2.0 (2016-11-23)
+ - added: variable function rexists to test if a matching expression matches a valid path
+ - added: transition execution reason flags to log output
+ - added: predefined variable PP_THREADS with the number of execution threads requested
+ - added: predefined variable PP_TARGETS with a comma separated list of the execution targets given
+ - added: warning if input file matches loose but not strict matching expression
+ - added: parameter to handle UTF-16 output encoding for commands outputs via shell configuration
+ - added: option to append log output rather than overwriting the log file
+ - added: named capture groups from the input filter as local variables
+ - changed: @error pragma to abort execution after output
+ - changed: output format for @error, @warn, @info and @debug
+ - changed: same destination path error message to display only a single location
+ - changed: execution of targets given on command-line from parallel to sequential
+ - changed: verbosity level for program execution details to DEBUG
+ - changed: default verbosity level to WARN
+ - changed: input file modification time check to tolerate 1 second difference
+ - changed: progress average over the last number of cores commands
+ - changed: verbosity level INFO to be output to standard error instead of standard error
+ - changed: log output for failed commands
+ - changed: internal command shell handling to reduce memory footprint
+ - changed: execution targets can now be used as elements for execution chains
+ - fixed: abort condition for automatic file descriptor cleanup on fork (Linux)
+ - fixed: error in @if block if more than one statement was included
+ - fixed: missing abort if execution preparation failed
+ - fixed: additional dependencies were wrongly used for input file variable substitution
+ - fixed: @import and @include resetting script parser
+ - fixed: dependency variable not being completed correctly
+ - fixed: output file not being created if additional input dependency was changed
+ - fixed: handling of UTF-16 program output (automatically converted now)
+ - fixed: parsing bug in nested @if statements
+ - fixed: wrong default value for shell raw parameter in some cases
+ - fixed: error if variable function is applied to variables with dynamic references
+ - fixed: handling of negative and out of bounds values in sub string variable function
+
 1.1.0 (2016-11-02)
  - added: missing syntax highlighting for "native" variable function to notepad++ syntax file
  - added: predefined variable PP_THREAD which is replaced at execution time

@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2014-2016 Daniel Starke
  * @date 2014-11-12
- * @version 2016-05-01
+ * @version 2016-11-16
  */
 #ifndef __LIBPCFXX_OS_SIGNAL_HPP__
 #define __LIBPCFXX_OS_SIGNAL_HPP__
@@ -132,6 +132,7 @@ public:
 		this->signals.cancel();
 		this->signalIoService.stop();
 		if ( this->worker.joinable() ) this->worker.join();
+		this->signalIoService.reset();
 	}
 private:
 	/**
@@ -141,7 +142,7 @@ private:
 	 * @param[in] signal - signal that was fired
 	 */
 	void handleSignal(const boost::system::error_code & error, const int signal) {
-		if ( error ) return; /* do nothing on error (probably just cancelled) */
+		if ( error ) return; /* do nothing on error (probably just canceled) */
 		if ( this->callback ) {
 			this->callback(signal);
 		}

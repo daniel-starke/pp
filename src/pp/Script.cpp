@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-24
- * @version 2016-10-24
+ * @version 2016-11-17
  * @remarks May fail to compile with GCC due to a bug for MinGW target within the GC
  * ( https://gcc.gnu.org/bugzilla/show_bug.cgi?id=66488 ).
  */
@@ -191,10 +191,7 @@ bool Script::readInclude(const boost::filesystem::path & path, const boost::file
 	ScriptGrammar scriptParser(*this, path);
 	
 	try {
-		const boost::filesystem::path oldMainSource(this->mainSource);
 		const boost::filesystem::path parentSource(this->currentSource);
-		this->reset();
-		this->mainSource = oldMainSource;
 		this->currentSource = path;
 		if ( this->config.environmentVariables ) {
 			boost::optional<StringLiteral &> scriptVar = this->vars.get(preDefPrefix + "SCRIPT");
@@ -284,7 +281,9 @@ bool Script::prepare(const std::string & target) {
 		return false;
 	}
 	this->progress.reset();
-	aTarget->second.prepare(boost::phoenix::bind(&Script::progressUpdate, this, _1, _2));
+	if ( ! aTarget->second.prepare(boost::phoenix::bind(&Script::progressUpdate, this, _1, _2)) ) {
+		return false;
+	}
 	this->progressDateTime = boost::posix_time::microsec_clock::universal_time();
 	this->progressCount = 0;
 	this->progress.start(0);

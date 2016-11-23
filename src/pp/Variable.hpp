@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-27
- * @version 2016-05-01
+ * @version 2016-11-21
  */
 #ifndef __PP_VARIABLE_HPP__
 #define __PP_VARIABLE_HPP__
@@ -36,6 +36,7 @@ namespace pp {
 
 /* forward class declarations */
 struct LineInfo;
+struct StringLiteralPart;
 class StringLiteral;
 class PathLiteral;
 struct LessPathLiteralPtrValue;
@@ -58,12 +59,9 @@ typedef std::vector<VariableMap> VariableScopes;
 
 
 /* functions */
-/**
- *
- */
 boost::optional<VariableMap::value_type> getKeyValuePair(const std::string & str, const boost::filesystem::path source);
-std::ostream & operator <<(std::ostream & out, const LineInfo & li);
-std::ostream & operator <<(std::ostream & out, const StringLiteral & sl);
+std::ostream & operator<< (std::ostream & out, const LineInfo & li);
+std::ostream & operator<< (std::ostream & out, const StringLiteral & sl);
 RegExNamedCaptureSet getRegExCaptureNames(const std::string & pattern);
 
 
@@ -72,7 +70,7 @@ RegExNamedCaptureSet getRegExCaptureNames(const std::string & pattern);
  * Structure to store a script location.
  */
 struct LineInfo {
-	friend std::ostream & operator <<(std::ostream & out, const LineInfo & li);
+	friend std::ostream & operator<< (std::ostream & out, const LineInfo & li);
 	boost::filesystem::path file; /**< File path. */
 	size_t line; /**< Line within the file (first line is 1). */
 	size_t column; /**< Column within the line (first column is 0). */
@@ -97,6 +95,19 @@ struct LineInfo {
 		line(l),
 		column(c)
 	{}
+	
+	/**
+	 * String less than operator.
+	 * 
+	 * @param[in] rh - right hand side
+	 * @return true if lh < rh, else false
+	 */
+	bool operator< (const LineInfo & rh) const {
+		if (this->file < rh.file) return true;
+		if (this->line < rh.line) return true;
+		if (this->column < rh.column) return true;
+		return false;
+	}
 };
 
 
@@ -143,6 +154,12 @@ typedef std::vector<StringLiteralFunctionPair> StringLiteralFunctionVector;
 
 
 /**
+ * Type for a list of string literal segments.
+ */
+typedef std::list<StringLiteralPart> StringLiteralList;
+
+
+/**
  * Structure of a string literal segment.
  */
 struct StringLiteralPart : boost::totally_ordered<StringLiteralPart> {
@@ -151,9 +168,11 @@ struct StringLiteralPart : boost::totally_ordered<StringLiteralPart> {
 	 */
 	enum Type {
 		STRING, /**< Segment is a standard string. */
-		VARIABLE /**< Segment is a reference to a variable. */
+		VARIABLE, /**< Segment is a reference to a variable. */
+		SUB /**< Segment is made up of sub segments. */
 	};
 	std::string value; /**< String value of the segment. */
+	StringLiteralList sub; /**< Sub segments. Value is set to the referenced variable name if this is filled. */
 	Type type; /**< Type of the segment. */
 	StringLiteralFunctionVector functions; /**< Functions to apply to the referenced variable content beforehand. */
 	
@@ -161,7 +180,7 @@ struct StringLiteralPart : boost::totally_ordered<StringLiteralPart> {
 	 * Default constructor.
 	 */
 	explicit StringLiteralPart() :
-		value(),
+		value(std::string()),
 		type(STRING)
 	{}
 	
@@ -177,24 +196,54 @@ struct StringLiteralPart : boost::totally_ordered<StringLiteralPart> {
 	{}
 	
 	/**
+	 * Constructor.
+	 *
+	 * @param[in] v - reference variable name
+	 * @param[in] s - string literal list value
+	 */
+	explicit StringLiteralPart(const std::string & v, const StringLiteralList & s) :
+		value(v),
+		sub(s),
+		type(SUB)
+	{}
+	
+	/**
+	 * Constructor.
+	 *
+	 * @param[in] v - reference variable name
+	 * @param[in] s - string literal list value
+	 * @param[in] f - string literal functions
+	 */
+	explicit StringLiteralPart(const std::string & v, const StringLiteralList & s, const StringLiteralFunctionVector & f) :
+		value(v),
+		sub(s),
+		type(SUB),
+		functions(f)
+	{}
+	
+	/**
 	 * Copy constructor.
 	 *
 	 * @param[in] o - object to copy
 	 */
 	StringLiteralPart(const StringLiteralPart & o) :
 		value(o.value),
+		sub(o.sub),
 		type(o.type),
 		functions(o.functions)
 	{}
+	
+	bool replaceVariables(std::string & unknownVariable, const VariableHandler & varHandler, const DynamicVariableSet & dynVars);
 	
 	/**
 	 * Assignment operator.
 	 *
 	 * @param[in] o - object to assign
 	 */
-	StringLiteralPart & operator =(const StringLiteralPart & o) {
+	StringLiteralPart & operator= (const StringLiteralPart & o) {
 		if (this != &o) {
 			this->value = o.value;
+			this->sub = o.sub;
 			this->type = o.type;
 			this->functions = o.functions;
 		}
@@ -209,6 +258,7 @@ struct StringLiteralPart : boost::totally_ordered<StringLiteralPart> {
 	 */
 	bool operator== (const StringLiteralPart & rh) const {
 		if (this->type != rh.type) return false;
+		if (this->sub != rh.sub) return false;
 		if (this->value != rh.value) return false;
 		return (this->functions == rh.functions);
 	}
@@ -221,17 +271,12 @@ struct StringLiteralPart : boost::totally_ordered<StringLiteralPart> {
 	 */
 	bool operator< (const StringLiteralPart & rh) const {
 		if (static_cast<int>(this->type) < static_cast<int>(rh.type)) return true;
+		if (this->sub < rh.sub) return true;
 		if (this->value < rh.value) return true;
 		if (this->functions < rh.functions) return true;
 		return false;
 	}
 };
-
-
-/**
- * Type for a list of string literal segments.
- */
-typedef std::list<StringLiteralPart> StringLiteralList;
 
 
 /**
@@ -256,6 +301,7 @@ typedef std::vector<StringLiteralCapturePair> StringLiteralCaptureVector;
  * Class to handle a string literal.
  */
 class StringLiteral : boost::totally_ordered<StringLiteral> {
+	friend struct StringLiteralPart;
 public:
 	/** Possible parsing flags. */
 	enum ParsingFlags {
@@ -375,9 +421,21 @@ public:
 	bool isVariable() const {
 		if ( ! this->set ) return false;
 		BOOST_FOREACH(const StringLiteralCapturePair & capture, this->literal) {
-			BOOST_FOREACH(const StringLiteralPart & part, capture.second) {
-				if (part.type == StringLiteralPart::VARIABLE) return true;
-			}
+			if ( StringLiteral::isVariable(capture.second) ) return true;
+		}
+		return false;
+	}
+	
+	/**
+	 * Returns true if there are still unresolved variables within this string literal.
+	 *
+	 * @param[in] dynVars - ignore these variables
+	 * @return true if still variable/dynamic, else false
+	 */
+	bool isVariable(const DynamicVariableSet & dynVars) const {
+		if ( ! this->set ) return false;
+		BOOST_FOREACH(const StringLiteralCapturePair & capture, this->literal) {
+			if ( StringLiteral::isVariable(capture.second, dynVars) ) return true;
 		}
 		return false;
 	}
@@ -392,9 +450,7 @@ public:
 		if ( ! this->set ) return std::string();
 		std::string result;
 		BOOST_FOREACH(const StringLiteralCapturePair & capture, this->literal) {
-			BOOST_FOREACH(const StringLiteralPart & part, capture.second) {
-				if (part.type == StringLiteralPart::STRING) result.append(part.value);
-			}
+			result.append(StringLiteral::getString(capture.second));
 		}
 		return result;
 	}
@@ -410,12 +466,16 @@ public:
 		std::string result;
 		BOOST_FOREACH(const StringLiteralCapturePair & capture, this->literal) {
 			if ( ! capture.first.empty() ) {
-				result.push_back('(');
+				result.append("(?<");
+				result.append(capture.first.back());
+				result.push_back('>');
 			}
 			BOOST_FOREACH(const StringLiteralPart & part, capture.second) {
 				switch (part.type) {
 				case StringLiteralPart::VARIABLE:
+				case StringLiteralPart::SUB:
 					result.push_back('{');
+					//result.append((part.type == StringLiteralPart::VARIABLE) ? part.value : StringLiteral::getVarString(part.sub));
 					result.append(part.value);
 					BOOST_FOREACH(const StringLiteralFunctionPair & function, part.functions) {
 						result.push_back(':');
@@ -454,6 +514,7 @@ public:
 			StringLiteralList literalPart;
 			StringLiteral newLiteral;
 			BOOST_FOREACH(const StringLiteralPart & part, capture.second) {
+				/* VARIABLE and SUB types are not possible here (should never appear here) */
 				if (part.type == StringLiteralPart::STRING) {
 					literalPart.push_back(part);
 					wholeLiteralPart.push_back(part);
@@ -483,6 +544,20 @@ public:
 	 */
 	StringLiteral & setRegexCaptures(const VariableMap & regex) {
 		this->regexCaptures = regex;
+		return *this;
+	}
+	
+	/** 
+	 * Associates regular expression captures to this string literal. Overwrites the captured value
+	 * if a capture name had already a value assigned.
+	 *
+	 * @param[in] regex - capture map to associate
+	 * @return reference to this object for chained operations
+	 */
+	StringLiteral & addRegexCaptures(const VariableMap & regex) {
+		BOOST_FOREACH(const VariableMap::value_type & value, regex) {
+			this->regexCaptures[value.first] = value.second;
+		}
 		return *this;
 	}
 	
@@ -558,11 +633,7 @@ public:
 		if ( ! this->set ) return false;
 		if ( dynVars.empty() ) return false;
 		BOOST_FOREACH(const StringLiteralCapturePair & capture, this->literal) {
-			BOOST_FOREACH(const StringLiteralPart & part, capture.second) {
-				if (part.type == StringLiteralPart::VARIABLE && dynVars.count(part.value) >= 1) {
-					return true;
-				}
-			}
+			if ( StringLiteral::hasDynVariable(capture.second, dynVars) ) return true;
 		}
 		return false;
 	}
@@ -630,6 +701,11 @@ public:
 	}
 	
 	/*
+	 * @return true if complete string, else false
+	 */
+	static bool replaceVariables(StringLiteralList & parts, std::string & unknownVariable, const VariableHandler & varHandler, const DynamicVariableSet & dynVars);
+	
+	/*
 	 * This method can be used to replace the dynamic variables.
 	 *
 	 * @return true if complete string, else false
@@ -662,31 +738,8 @@ public:
 	 */
 	bool replaceVariables(const VariableHandler & varHandler);
 	
-	/**
-	 * Returns a flat representation of this string literal.
-	 *
-	 * @return flat vector list
-	 */
-	StringLiteralList getFlatVector() const {
-		StringLiteralList result;
-		StringLiteralPart::Type lastType = StringLiteralPart::VARIABLE;
-		BOOST_FOREACH(const StringLiteralCapturePair & capture, this->literal) {
-			BOOST_FOREACH(const StringLiteralPart & part, capture.second) {
-				if (lastType == part.type && part.type == StringLiteralPart::STRING) {
-					/* combine string parts */
-					result.back().value.append(part.value);
-				} else {
-					result.push_back(part);
-				}
-				lastType = part.type;
-			}
-		}
-		return result;
-	}
+	void fold();
 	
-	void flatten();
-	
-	StringLiteralList getFlatVectorForReplacement(const StringLiteralFunctionVector & functions, const bool canBeVariable) const;
 	static void functionWin(std::string & str);
 	static void functionUnix(std::string & str);
 	static void functionEsc(std::string & str);
@@ -699,13 +752,111 @@ public:
 	static void functionFile(std::string & str);
 	static void functionExtension(std::string & str);
 	static void functionExists(std::string & str);
+	static void functionRExists(std::string & str, const LineInfo & li, const bool fullRecursiveMatch);
 private:
+	/**
+	 * Returns true if there are still unresolved variables within this string literal part list.
+	 *
+	 * @param[in] segment - string literal part list
+	 * @return true if still variable/dynamic, else false
+	 */
+	static bool isVariable(const StringLiteralList & segment) {
+		BOOST_FOREACH(const StringLiteralPart & part, segment) {
+			if (part.type == StringLiteralPart::VARIABLE) return true;
+			if ( StringLiteral::isVariable(part.sub) ) return true;
+		}
+		return false;
+	}
+	
+	/**
+	 * Returns true if there are still unresolved variables within this string literal part list.
+	 *
+	 * @param[in] segment - string literal part list
+	 * @param[in] dynVars - ignore these variables
+	 * @return true if still variable/dynamic, else false
+	 */
+	static bool isVariable(const StringLiteralList & segment, const DynamicVariableSet & dynVars) {
+		BOOST_FOREACH(const StringLiteralPart & part, segment) {
+			if (part.type == StringLiteralPart::VARIABLE && dynVars.find(part.value) == dynVars.end()) return true;
+			if ( StringLiteral::isVariable(part.sub) ) return true;
+		}
+		return false;
+	}
+	
+	/**
+	 * Returns the raw string representation of this string literal part list.
+	 *
+	 * @param[in] segment - string literal part list
+	 * @return string representation of the string literal
+	 * @note referenced variables are ignored
+	 */
+	static std::string getString(const StringLiteralList & segment) {
+		std::string result;
+		BOOST_FOREACH(const StringLiteralPart & part, segment) {
+			if (part.type == StringLiteralPart::STRING) result.append(part.value);
+			result.append(StringLiteral::getString(part.sub));
+		}
+		return result;
+	}
+	
+	/**
+	 * Returns the raw string representation of this string literal in its definition form.
+	 *
+	 * @param[in] segment - string literal part list
+	 * @return string representation of the string literal
+	 * @note referenced variables are returned in reference style (example: "{var}")
+	 */
+	static std::string getVarString(const StringLiteralList & segment) {
+		std::string result;
+		BOOST_FOREACH(const StringLiteralPart & part, segment) {
+			switch (part.type) {
+			case StringLiteralPart::VARIABLE:
+			case StringLiteralPart::SUB:
+				result.push_back('{');
+				result.append((part.type == StringLiteralPart::VARIABLE) ? part.value : StringLiteral::getVarString(part.sub));
+				BOOST_FOREACH(const StringLiteralFunctionPair & function, part.functions) {
+					result.push_back(':');
+					result.append(function.first);
+				}
+				result.push_back('}');
+				break;
+			case StringLiteralPart::STRING:
+				result.append(part.value);
+				break;
+			default:
+				break;
+			}
+		}
+		return result;
+	}
+	
+	/**
+	 * Checks whether the string literal references one or more of the given dynamic variables.
+	 *
+	 * @param[in] segment - string literal part list
+	 * @param[in] dynVars - check against these variables
+	 * @return true if there is a reference to such a dynamic variable, else false
+	 */
+	static bool hasDynVariable(const StringLiteralList & segment, const DynamicVariableSet & dynVars) {
+		BOOST_FOREACH(const StringLiteralPart & part, segment) {
+			if (part.type == StringLiteralPart::VARIABLE && dynVars.count(part.value) >= 1) {
+				return true;
+			}
+			if ( StringLiteral::hasDynVariable(part.sub, dynVars) ) return true;
+		}
+		return false;
+	}
+	
+	static bool fold(StringLiteralList & segment);
 	void setLiteralFromString(const std::string & str, const ParsingFlags parsingFlags = STANDARD);
 };
 
 
+#ifndef _MSC_VER
+/* unsupported in MSVC (@see https://connect.microsoft.com/VisualStudio/feedback/details/529700/enum-operator-overloading-broken) */
 StringLiteral::ParsingFlags operator| (const StringLiteral::ParsingFlags lhs, const StringLiteral::ParsingFlags rhs);
 bool operator== (const StringLiteral::ParsingFlags lhs, const StringLiteral::ParsingFlags rhs);
+#endif
 
 
 /**
@@ -783,7 +934,7 @@ public:
 	 * @return true if all checked flags are set, else false
 	 */
 	bool hasFlags(const Flag val) const {
-		return this->flags & val;
+		return (this->flags & val) != 0;
 	}
 	
 	/**
@@ -829,7 +980,7 @@ public:
 	 */
 	PathLiteral & operator= (const StringLiteral & o) {
 		if (this != &o) {
-			this->StringLiteral::operator =(o);
+			this->StringLiteral::operator= (o);
 		}
 		return *this;
 	}
@@ -842,7 +993,7 @@ public:
 	 */
 	PathLiteral & operator= (const PathLiteral & o) {
 		if (this != &o) {
-			this->StringLiteral::operator =(o);
+			this->StringLiteral::operator= (o);
 			this->flags = o.flags;
 			this->lastModification = o.lastModification;
 		}
@@ -856,7 +1007,7 @@ public:
 	 * @return true if both path literals are equal, else false.
 	 */
 	bool operator== (const PathLiteral & rh) const {
-		if ( ! this->StringLiteral::operator ==(rh) ) return false;
+		if ( ! this->StringLiteral::operator== (rh) ) return false;
 		if (this->flags != rh.flags) return false;
 		return (this->lastModification == rh.lastModification);
 	}
@@ -868,7 +1019,7 @@ public:
 	 * @return true if this path literal should be ordered before the right hand side value, else false
 	 */
 	bool operator< (const PathLiteral & rh) const {
-		if ( this->StringLiteral::operator <(rh) ) return true;
+		if ( this->StringLiteral::operator< (rh) ) return true;
 		if (this->flags < rh.flags) return true;
 		if (this->lastModification < rh.lastModification) return true;
 		return false;
@@ -894,8 +1045,30 @@ struct LessPathLiteralPtrValue {
 };
 
 
+/**
+ * Functor for less than comparison of two path literal pointers and their locations.
+ */
+struct LessPathLiteralPtrValueLocation {
+	/**
+	 * Functor for less than comparison of two path literal pointers and their locations.
+	 *
+	 * @param[in] lh - left hand side
+	 * @param[in] rh - right hand side
+	 * @return true if the pointed left hand side value and location should be ordered before the
+	 * pointed right hand side value and location, else false
+	 */
+	bool operator() (const boost::shared_ptr<PathLiteral> & lh, const boost::shared_ptr<PathLiteral> & rh) const {
+		if (lh->getLineInfo() < rh->getLineInfo()) return true;
+		return lh->StringLiteral::operator< (static_cast<const StringLiteral &>(*rh));
+	}
+};
+
+
+#ifndef _MSC_VER
+/* unsupported in MSVC (@see https://connect.microsoft.com/VisualStudio/feedback/details/529700/enum-operator-overloading-broken) */
 PathLiteral::Flag operator| (const PathLiteral::Flag lhs, const PathLiteral::Flag rhs);
 bool operator& (const PathLiteral::Flag lhs, const PathLiteral::Flag rhs);
+#endif
 
 
 /**

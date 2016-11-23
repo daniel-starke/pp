@@ -37,7 +37,7 @@ The following dependencies are given:
 - SQLite 3.8.11.1
 - NSIS 2.46.5 Unicode (optional)
 
-SQLite was build with SQLITE_ENABLE_UPDATE_DELETE_LIMIT=1 and  
+SQLite was built with SQLITE_ENABLE_UPDATE_DELETE_LIMIT=1 and  
 SQLITE_ENABLE_COLUMN_METADATA=1.  
   
 Edit Makefile to match your target system configuration.  
@@ -49,7 +49,9 @@ To build the setup (needs NSIS):
 
     make setup
 
-[![Linux Build Status](https://travis-ci.org/daniel-starke/pp.svg?label=Linux%20build)](https://travis-ci.org/daniel-starke/pp)
+[![Linux Build Status](https://travis-ci.org/daniel-starke/pp.svg?label=Linux%20build)](https://travis-ci.org/daniel-starke/pp)  
+
+MSVC is not supported due to compiler bugs.
 
 License
 =======

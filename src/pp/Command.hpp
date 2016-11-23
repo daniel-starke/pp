@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-10-30
+ * @version 2016-11-23
  */
 #ifndef __PP_COMMAND_HPP__
 #define __PP_COMMAND_HPP__
@@ -21,6 +21,7 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/format.hpp>
 #include <boost/locale.hpp>
+#include <boost/shared_ptr.hpp>
 /* workaround for boost::phoenix::bind and boost::bind namespace collision */
 #define BOOST_BIND_NO_PLACEHOLDERS
 #include <boost/thread/thread.hpp>
@@ -52,7 +53,7 @@ public:
 		FAILED    /**< An error occurred running the command. */
 	};
 private:
-	Shell shell; /**< Description of the used shell. */
+	boost::shared_ptr<Shell> shell; /**< Description of the used shell. */
 	StringLiteral command; /**< The command to execute. */
 	boost::posix_time::ptime startDt; /**< Start date time. */
 	boost::posix_time::ptime endDt; /**< End date time. */
@@ -73,12 +74,18 @@ public:
 	 * @param[in] sh - description of the desired execution shell
 	 * @param[in] cmd - command to execute
 	 */
-	explicit Command(const Shell & sh, const StringLiteral & cmd):
+	explicit Command(const boost::shared_ptr<Shell> & sh, const StringLiteral & cmd):
 		shell(sh),
 		command(cmd),
 		state(IDLE)
 	{
 		this->updateThreadId();
+		if (sh.get() == NULL) {
+			BOOST_THROW_EXCEPTION(
+				pcf::exception::NullPointer()
+				<< pcf::exception::tag::Message("Missing shell description.")
+			);
+		}
 	}
 	
 	/**
@@ -143,11 +150,11 @@ public:
 	 */
 	StringLiteral getFinalCommandString() const {
 		StringLiteral aCommand(this->command);
-		StringLiteral result(this->shell.cmdLine);
+		StringLiteral result(this->shell->cmdLine);
 		VariableMap ppThread, replacements;
 		ppThread["PP_THREAD"].setRawString(this->threadId);
 		aCommand.replaceVariables(ppThread);
-		replacements["?"] = StringLiteral(this->shell.replace(aCommand.getString()), aCommand.getLineInfo(), StringLiteral::RAW);
+		replacements["?"] = StringLiteral(this->shell->replace(aCommand.getString()), aCommand.getLineInfo(), StringLiteral::RAW);
 		result.replaceVariables(replacements);
 		return result;
 	}
@@ -164,11 +171,11 @@ public:
 	StringLiteral getFinalCommandString(const VariableHandler & vars) const {
 		StringLiteral aCommand(this->command);
 		aCommand.replaceVariables(vars);
-		StringLiteral result(this->shell.cmdLine);
+		StringLiteral result(this->shell->cmdLine);
 		VariableMap ppThread, replacements;
 		ppThread["PP_THREAD"].setRawString(this->threadId);
 		aCommand.replaceVariables(ppThread);
-		replacements["?"] = StringLiteral(this->shell.replace(aCommand.getString()), aCommand.getLineInfo(), StringLiteral::RAW);
+		replacements["?"] = StringLiteral(this->shell->replace(aCommand.getString()), aCommand.getLineInfo(), StringLiteral::RAW);
 		result.replaceVariables(replacements);
 		return result;
 	}
@@ -247,15 +254,20 @@ public:
 	 *
 	 * @param[in,out] out - output stream to write to
 	 * @param[in,out] wroteOutput - set to true if output was written, sets nothing else
+	 * @param[in] reasonFlags - reason flags for the transition of this command
 	 */
-	void printResults(std::ostream & out, bool & wroteOutput) const {
+	void printResults(std::ostream & out, bool & wroteOutput, const int reasonFlags) const {
 		if ( this->startDt.is_not_a_date_time() ) {
 			/* command was not executed */
 			out << "\nCommand was not executed: " << this->getFinalCommandString().getString() << '\n';
 			wroteOutput = true;
 			return;
 		}
-		out << '\n' << Command::dateTimeToString(this->startDt) << ": " <<  this->getFinalCommandString().getString() << '\n';
+		out << '\n' << Command::dateTimeToString(this->startDt) << ": ["
+			<< ProcessTransition::reasonMap[0][(reasonFlags & (1 << 0)) == 0 ? 0 : 1]
+			<< ProcessTransition::reasonMap[1][(reasonFlags & (1 << 1)) == 0 ? 0 : 1]
+			<< ProcessTransition::reasonMap[2][(reasonFlags & (1 << 2)) == 0 ? 0 : 1]
+			<< "] " <<  this->getFinalCommandString().getString() << '\n';
 		wroteOutput = true;
 		std::string newOutput;
 		char lastChar = '\n';
@@ -279,7 +291,7 @@ public:
 		} else {
 			out
 				<< Command::dateTimeToString(this->endDt)
-				<< ": Command exit with exit code "
+				<< ": Command failed with exit code "
 				<< this->exitCode
 				<< " after "
 				<< (this->endDt - this->startDt).total_seconds()
@@ -324,7 +336,6 @@ public:
 	 * an exit code different from 0 (disabled by default)
 	 * @return true on success (state == FINISHED), else false
 	 * @remarks the command is blocked for subsequently executions until it has finished execution
-	 * @todo read command output as UTF-8 if configured in that way
 	 */
 	bool execute(const bool checkCommand = false) {
 		boost::mutex::scoped_lock lock(this->mutex);
@@ -336,14 +347,14 @@ public:
 		this->startDt = boost::posix_time::microsec_clock::universal_time();
 		this->endDt = boost::posix_time::ptime();
 #ifdef PCF_IS_WIN
-		const std::wstring shellPath(this->shell.path.wstring(pcf::path::utf8));
+		const std::wstring shellPath(this->shell->path.wstring(pcf::path::utf8));
 		const std::wstring cmd(boost::locale::conv::utf_to_utf<wchar_t>(this->getFinalCommandString().getString()));
 #else /* not Windows */
-		const std::string shellPath(this->shell.path.string(pcf::path::utf8));
+		const std::string shellPath(this->shell->path.string(pcf::path::utf8));
 		const std::string cmd(this->getFinalCommandString().getString());
 #endif /* Windows */
 #ifdef PCF_IS_WIN
-		if ( this->shell.raw ) {
+		if ( this->shell->raw ) {
 			proc = boost::optional<pcf::process::ProcessPipe>(pcf::process::ProcessPipeFactory(
 				shellPath,
 				cmd,
@@ -366,7 +377,6 @@ public:
 		}
 		lock.unlock();
 		{
-			/* @todo read to UTF-8 on Windows */
 			boost::iostreams::stream_buffer<boost::iostreams::file_descriptor_source> in(
 				proc->getOutFd(),
 				boost::iostreams::never_close_handle
@@ -383,6 +393,16 @@ public:
 			this->state = FAILED;
 		} else {
 			this->state = FINISHED;
+		}
+		/* convert UTF-16 output to UTF-8 (if possible) */
+		if (this->shell->outputEncoding == Shell::UTF16 && (this->output.size() % sizeof(wchar_t)) == 0) {
+			try {
+				const std::wstring wstr(
+					reinterpret_cast<const wchar_t *>(&(this->output[0])),
+					reinterpret_cast<const wchar_t *>(&(this->output[0]) + this->output.size())
+				);
+				this->output = boost::locale::conv::utf_to_utf<char>(wstr, boost::locale::conv::stop);
+			} catch (...) {};
 		}
 		return (this->state == FINISHED);
 	}

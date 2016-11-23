@@ -3,9 +3,9 @@
  * @author Daniel Starke
  * @copyright Copyright 2016 Daniel Starke
  * @see fdios.h
- * @date 2016-10-26
+ * @date 2016-11-13
  */
-#define _POSIX_C_SOURCE 199309L
+#define _POSIX_C_SOURCE 200809L
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>

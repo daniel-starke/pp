@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-08-13
- * @version 2016-05-01
+ * @version 2016-11-20
  */
 #include <cstring>
 #include <new>
@@ -130,7 +130,7 @@ std::basic_string<wchar_t> resolveExecutable(const std::basic_string<wchar_t> & 
  * 
  * @see tFdioPMode
  */
-tFdioPMode operator |(const tFdioPMode a, const tFdioPMode b) {
+tFdioPMode operator| (const tFdioPMode a, const tFdioPMode b) {
 	return static_cast<tFdioPMode>(static_cast<int>(a) | static_cast<int>(b));
 }
 

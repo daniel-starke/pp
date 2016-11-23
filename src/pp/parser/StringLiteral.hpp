@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-10-31
- * @version 2016-05-01
+ * @version 2016-11-13
  */
 #ifndef __PP_PARSER_STRINGLITERAL_HPP__
 #define __PP_PARSER_STRINGLITERAL_HPP__
@@ -49,14 +49,19 @@ namespace encoding = boost::spirit::standard;
 
 /**
  * String literal grammar of the parallel processor script.
+ * 
+ * @param[in] _r1 - flags for string literal parsing
+ * @param[in] _r2 - optional end of input character
+ * @param[in] _r3 - full recursive path match flag
  *
  * @tparam Iterator - multi-pass forward iterator type
  */
 template <typename Iterator>
-struct StringLiteral : qi::grammar<Iterator, StringLiteralCaptureVector(pp::StringLiteral::ParsingFlags, boost::optional<char>)> {
+struct StringLiteral : qi::grammar<Iterator, StringLiteralCaptureVector(pp::StringLiteral::ParsingFlags, boost::optional<char>, bool)> {
 	pp::StringLiteral::ParsingFlags currentParsingFlags; /**< Currently enforced parsing flags. */
 	boost::optional<char> endOfInputCharacter; /**< Optionally terminate grammar at this character. */
 	bool printError; /**< Set to true to print parsing errors to the standard output console. Throw an exception otherwise. */
+	bool fullRecursiveMatch; /**< Set to true to enable full recursive match in :rexists, false to match per path element. */
 	/* simple grammars */
 	qi::rule<Iterator> endOfInput;
 	qi::rule<Iterator> startReplacement;
@@ -85,7 +90,7 @@ struct StringLiteral : qi::grammar<Iterator, StringLiteralCaptureVector(pp::Stri
 	qi::rule<Iterator, pp::StringLiteralList()> partList;
 	qi::rule<Iterator, pp::StringLiteralCapturePair(), qi::locals<pp::CaptureNameVector> > capture;
 	qi::rule<Iterator, pp::StringLiteralCaptureVector()> captureList;
-	qi::rule<Iterator, pp::StringLiteralCaptureVector(pp::StringLiteral::ParsingFlags, boost::optional<char>)> startRule;
+	qi::rule<Iterator, pp::StringLiteralCaptureVector(pp::StringLiteral::ParsingFlags, boost::optional<char>, bool)> startRule;
 	size_t captureIndex;
 	
 	/**
@@ -95,11 +100,12 @@ struct StringLiteral : qi::grammar<Iterator, StringLiteralCaptureVector(pp::Stri
 	 * @param[in] eoic - optional end of input character
 	 * @param[in] pe - true to print errors to the standard output console, false to throw an exception instead
 	 */
-	StringLiteral(const pp::StringLiteral::ParsingFlags parsingFlags = pp::StringLiteral::STANDARD, const boost::optional<char> & eoic = boost::optional<char>(), const bool pe = false):
+	StringLiteral(const pp::StringLiteral::ParsingFlags parsingFlags = pp::StringLiteral::STANDARD, const boost::optional<char> & eoic = boost::optional<char>(), const bool pe = false, const bool frm = false):
 		StringLiteral::base_type(startRule, "string literal"),
 		currentParsingFlags(parsingFlags),
 		endOfInputCharacter(eoic),
-		printError(pe)
+		printError(pe),
+		fullRecursiveMatch(frm)
 	{
 		/* use these Spirit terminals and Phoenix actors */
 		using boost::spirit::repository::qi::iter_pos;
@@ -184,12 +190,13 @@ struct StringLiteral : qi::grammar<Iterator, StringLiteralCaptureVector(pp::Stri
 			| &int_ >> (
 				omit[iter_pos[_a = _1]] >> int_ >> -(subStringParamDelimiter >> int_) >> omit[iter_pos[_b = construct<std::string>(_a, _1)]]
 			)[_val = phx::bind<StringLiteralFunctionPair>(&StringLiteral::getSubstrFunction, _b, _1, _2)]
-			| (eps(_r1) >> ( /* non-dynamic variable */
+			| (eps(_r1) >> omit[iter_pos[_a = _1]] >> ( /* non-dynamic variable */
 				  string("directory")[_val = construct<StringLiteralFunctionPair>(_1, pp::StringLiteral::functionDirectory)]
 				| string("filename") [_val = construct<StringLiteralFunctionPair>(_1, pp::StringLiteral::functionFilename)]
 				| string("file")     [_val = construct<StringLiteralFunctionPair>(_1, pp::StringLiteral::functionFile)]
 				| string("extension")[_val = construct<StringLiteralFunctionPair>(_1, pp::StringLiteral::functionExtension)]
 				| string("exists")   [_val = construct<StringLiteralFunctionPair>(_1, pp::StringLiteral::functionExists)]
+				| string("rexists")  [_val = phx::bind<StringLiteralFunctionPair>(&StringLiteral::getRExistsFunction, _1, _a, this->fullRecursiveMatch)]
 			))
 		);
 		
@@ -202,10 +209,11 @@ private:
 	 *
 	 * @param[in] parsingFlags - flags for string literal parsing
 	 * @param[in] eoic - optional end of input character
+	 * @param[in] frm - full recursive match flag
 	 * @param[in] forceReInit - true to re-initialize the grammar, false to leave it as it is currently
 	 */
-	void initGrammar(const pp::StringLiteral::ParsingFlags parsingFlags, const boost::optional<char> & eoic, const bool forceReInit = false) {
-		if (this->currentParsingFlags == parsingFlags && this->endOfInputCharacter == eoic && ( ! forceReInit )) return; /* no change */
+	void initGrammar(const pp::StringLiteral::ParsingFlags parsingFlags, const boost::optional<char> & eoic, const bool frm, const bool forceReInit = false) {
+		if (this->currentParsingFlags == parsingFlags && this->endOfInputCharacter == eoic && this->fullRecursiveMatch == frm && ( ! forceReInit )) return; /* no change */
 		using encoding::char_;
 		using encoding::string;
 		using phx::at_c;
@@ -217,6 +225,7 @@ private:
 		using qi::_a;
 		using qi::_r1;
 		using qi::_r2;
+		using qi::_r3;
 		using qi::_val;
 		using qi::_1;
 		using qi::_2;
@@ -231,6 +240,7 @@ private:
 		
 		this->currentParsingFlags = parsingFlags;
 		this->endOfInputCharacter = eoic;
+		this->fullRecursiveMatch = frm;
 		
 		if ( this->endOfInputCharacter ) {
 			endOfInput = omit[char_(*endOfInputCharacter) | qi::eoi];
@@ -238,7 +248,12 @@ private:
 			endOfInput = qi::eoi;
 		}
 		
+#ifdef _MSC_VER
+		/* workaround for MSVC compiler bug (@see https://connect.microsoft.com/VisualStudio/feedback/details/529700/enum-operator-overloading-broken) */
+		if ((static_cast<int>(parsingFlags) & static_cast<int>(pp::StringLiteral::RAW | pp::StringLiteral::NO_ESCAPE)) != 0) {
+#else
 		if (parsingFlags == (pp::StringLiteral::RAW | pp::StringLiteral::NO_ESCAPE)) {
+#endif
 			basicChar = !endOfInput >> char_;
 		} else {
 			basicChar = !endOfInput >> (
@@ -321,7 +336,12 @@ private:
 				/* eps[phx::ref(this->captureIndex) = val(1)] >> *capture */
 				eps >> *capture
 			);
+#ifdef _MSC_VER
+		/* workaround for MSVC compiler bug (@see https://connect.microsoft.com/VisualStudio/feedback/details/529700/enum-operator-overloading-broken) */
+		} else if ((static_cast<int>(parsingFlags) & static_cast<int>(pp::StringLiteral::STANDARD | pp::StringLiteral::RAW)) != 0) {
+#else
 		} else if (parsingFlags == (pp::StringLiteral::STANDARD | pp::StringLiteral::RAW)) {
+#endif
 			capture = !endOfInput >> (
 				eps[clear(_a)]
 				>> partList[_val = construct<pp::StringLiteralCapturePair>(_a, _1)]
@@ -331,7 +351,7 @@ private:
 		}
 		
 		startRule %= (
-			eps[phx::bind(&StringLiteral::initGrammar, this, _r1, _r2, false)] >> !endOfInput >> captureList
+			eps[phx::bind(&StringLiteral::initGrammar, this, _r1, _r2, _r3, false)] >> !endOfInput >> captureList
 		);
 		
 		if ( this->printError ) {
@@ -389,6 +409,21 @@ private:
 	 */
 	static StringLiteralFunctionPair getSubstrFunction(const std::string & str, const int start, const boost::optional<int> len) {
 		return StringLiteralFunctionPair(str, phx::bind(&pp::StringLiteral::functionSubstr, phx::placeholders::_1, start, len));
+	}
+	
+	/**
+	 * Returns a regists function object for the given string.
+	 * 
+	 * @param[in] str - string to apply this function to
+	 * @param[in] it - extract script location from this iterator
+	 * @param[in] frm - true to enable full recursive match, false to match path elements only
+	 * @return rexists function object
+	 * @see pp::StringLiteral::functionRExists
+	 */
+	static StringLiteralFunctionPair getRExistsFunction(const std::string & str, const Iterator & it, const bool frm) {
+		const boost::spirit::classic::file_position_base<std::string> & pos = it.get_position();
+		const LineInfo li(pos.file, static_cast<size_t>(pos.line), static_cast<size_t>(pos.column));
+		return StringLiteralFunctionPair(str, phx::bind(&pp::StringLiteral::functionRExists, phx::placeholders::_1, li, frm));
 	}
 };
 

@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-08-04
- * @version 2016-05-01
+ * @version 2016-11-20
  */
 #ifndef __LIBPCFXX_PROCESS_UTILITY_HPP__
 #define __LIBPCFXX_PROCESS_UTILITY_HPP__
@@ -33,7 +33,7 @@ namespace pcf {
 namespace process {
 
 
-tFdioPMode operator |(const tFdioPMode a, const tFdioPMode b);
+tFdioPMode operator| (const tFdioPMode a, const tFdioPMode b);
 
 
 /**

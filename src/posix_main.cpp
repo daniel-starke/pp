@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2014-2016 Daniel Starke
  * @date 2014-03-09
- * @version 2016-10-28
+ * @version 2016-11-18
  */
 #include <cstdlib>
 #include <boost/locale.hpp>
@@ -45,29 +45,49 @@ int wmain(int argc, char ** argv, char ** enpv) {
 int main(int argc, char ** argv, char ** enpv) {
 #endif
 	/* handle Unicode correctly */
+	std::locale::global(boost::locale::generator().generate("UTF-8"));
 #if defined(PCF_IS_WIN) && defined(_UNICODE)
 	wchar_t ** wenpv, ** wargv;
 	int wargc, si = 0;
+	pcf::coding::Utf8ToUtf16StreamBuffer * u8cout = NULL;
+	pcf::coding::Utf8ToUtf16StreamBuffer * u8cerr = NULL;
+	std::streambuf * out = NULL;
+	std::streambuf * err = NULL;
 	/* this also creates the global variable __wargv */
 	__wgetmainargs(&wargc, &wargv, &wenpv, _CRT_glob, &si);
-	/* enable UTF-16 output to standard output and standard error console */
-	_setmode(_fileno(stdout), _O_U16TEXT);
-	_setmode(_fileno(stderr), _O_U16TEXT);
-	std::locale::global(boost::locale::generator().generate("UTF-8"));
-	pcf::coding::Utf8ToUtf16StreamBuffer u8cout(stdout);
-	pcf::coding::Utf8ToUtf16StreamBuffer u8cerr(stderr);
-	std::streambuf * out = std::cout.rdbuf();
-	std::streambuf * err = std::cerr.rdbuf();
-	std::cout.rdbuf(&u8cout);
-	std::cerr.rdbuf(&u8cerr);
+	if (GetFileType(GetStdHandle(STD_OUTPUT_HANDLE)) == FILE_TYPE_CHAR) {
+		/* enable UTF-16 output to standard output console */
+		_setmode(_fileno(stdout), _O_U16TEXT);
+		u8cout = new pcf::coding::Utf8ToUtf16StreamBuffer(stdout);
+		out = std::cout.rdbuf();
+		std::cout.rdbuf(u8cout);
+	} else {
+		/* ensure UTF-8 is output without any transformations */
+		_setmode(_fileno(stdout), _O_BINARY);
+	}
+	if (GetFileType(GetStdHandle(STD_ERROR_HANDLE)) == FILE_TYPE_CHAR) {
+		/* enable UTF-16 output to standard error console */
+		_setmode(_fileno(stderr), _O_U16TEXT);
+		u8cerr = new pcf::coding::Utf8ToUtf16StreamBuffer(stderr);
+		err = std::cerr.rdbuf();
+		std::cerr.rdbuf(u8cerr);
+	} else {
+		/* ensure UTF-8 is output without any transformations */
+		_setmode(_fileno(stderr), _O_BINARY);
+	}
 	/* process user defined main function */
 	const int result = posix_main(wargc, wargv, wenpv);
 	/* revert stream buffers to let cout and cerr clean up remaining memory correctly */
-    std::cout.rdbuf(out);
-    std::cerr.rdbuf(err);
+	if (u8cout != NULL) {
+		std::cout.rdbuf(out);
+		delete u8cout;
+	}
+	if (u8cerr != NULL) {
+		std::cerr.rdbuf(err);
+		delete u8cerr;
+	}
 	return result;
 #else /* not windows or unicode */
-	std::locale::global(boost::locale::generator().generate("UTF-8"));
 	return posix_main(argc, argv, enpv);
 #endif /* windows, unicode */
 }

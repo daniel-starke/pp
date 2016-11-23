@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-05-01
+ * @version 2016-11-19
  */
 #ifndef __PP_EXECUTION_HPP__
 #define __PP_EXECUTION_HPP__
@@ -182,13 +182,27 @@ public:
 	 */
 	Execution & setLogOutput(const boost::filesystem::path & output) {
 		const std::string str(output.string(pcf::path::utf8));
-		if (str == "stdout") {
+		if ( str.empty() ) {
+			BOOST_THROW_EXCEPTION(
+				pcf::exception::InvalidValue()
+				<< pcf::exception::tag::Message(std::string("Invalid log file path \"") + str + "\".")
+			);
+		} else if (str == "stdout") {
 			this->setLogOutput(std::cout);
 		} else if (str == "stderr") {
 			this->setLogOutput(std::cerr);
 		} else {
 			try {
-				this->logFile.reset(new pcf::file::ofstream(output, std::ofstream::trunc | std::ofstream::out));
+				if (str[0] == '+') {
+					this->logFile.reset(
+						new pcf::file::ofstream(
+							boost::filesystem::path(++(str.begin()), str.end(), pcf::path::utf8),
+							std::ofstream::app | std::ofstream::ate | std::ofstream::out
+						)
+					);
+				} else {
+					this->logFile.reset(new pcf::file::ofstream(output, std::ofstream::trunc | std::ofstream::out));
+				}
 				this->log.reset(*(this->logFile));
 			} catch (...) {
 				/* failed to open the file */
@@ -223,6 +237,18 @@ public:
 	bool execute(boost::asio::io_service & ioService, const ProgressCallback & callProgress, const ExecutionCallback & callFinally);
 	bool complete(bool & isFirst);
 private:
+	/**
+	 * Callback function to reset a given process node.
+	 *
+	 * @param[in,out] element - reset this node
+	 * @param[in] level - hierarchical level of the given process node with the dependency tree
+	 * @return true on success, else false
+	 */
+	static bool resetProcessNode(ProcessNode::ValueType & element, const size_t /* level */) {
+		element.input.clear();
+		element.process.reset();
+		return true;
+	}
 	/**
 	 * Callback function to resolve the dependencies of a given process node.
 	 *

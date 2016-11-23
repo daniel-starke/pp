@@ -1,16 +1,18 @@
 /**
  * @file fdio.i
  * @author Daniel Starke
- * @copyright Copyright 2015-2016 Daniel Starke
+ * @copyright Copyright 2016 Daniel Starke
  * @see fdios.h
  * @see fdious.h
- * @date 2015-10-30
+ * @date 2016-08-17
+ * @version 2016-11-08
  * @internal This file is never used or compiled directly but only included.
  * @remarks Define CHAR_T to the character type before including this file.
  * @remarks See FPOPEN_FUNC() and FPCLOSE_FUNC() for further notes.
  * @see https://blogs.msdn.microsoft.com/oldnewthing/20111216-00/?p=8873/
  */
-#define _POSIX_C_SOURCE 199309L
+#define _POSIX_C_SOURCE 200809L
+#define __XOPEN_2K8 1
 #include <stdio.h>
 #include <string.h>
 #include <libpcf/target.h>
@@ -41,7 +43,7 @@
 /**
  * @fn tFdioPHandle * FPOPEN_FUNC(const CHAR_T ** shell, const CHAR_T * command, FILE * input, const char * mode)
  * Executes the passed program and opens its stdin or stdout for reading
- * or writing. The difference to popen is, that the command excepts a shell
+ * or writing. The difference to popen is, that the command expects a shell
  * which shall be used for execution.
  * The first argument of 'shell' is the program path and any other following except NULL are the
  * arguments that shall be passed to shell for executing the given command.
@@ -84,6 +86,11 @@
 
 
 #ifdef PCF_IS_WIN
+#ifndef _WIN32_WINNT_VISTA
+#define _WIN32_WINNT_VISTA 0x0600
+#endif
+
+
 /* Defined in fdio.c. */
 extern volatile HANDLE _LIBPCF_CREATEPROCESS_MUTEX;
 

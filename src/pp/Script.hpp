@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-24
- * @version 2016-10-29
+ * @version 2016-11-20
  *
  * Data hierarchy:@n
  * - Execution
@@ -63,6 +63,7 @@
 #include <boost/iostreams/stream.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/locale.hpp>
+#include <boost/make_shared.hpp>
 #include <boost/optional.hpp>
 #include <boost/regex.hpp>
 #include <boost/shared_ptr.hpp>
@@ -117,13 +118,15 @@ public:
 	 *
 	 * @param[in] c - initial script configuration
 	 * @param[in] vh - initial variable handler which may contain the environment variables in its
+	 * @param[in] jobs - requested number of execution threads
 	 * global most scope
 	 */
-	explicit Script(const Configuration & c, const VariableHandler & vh):
+	explicit Script(const Configuration & c, const VariableHandler & vh, const size_t jobs = 10):
 		config(c),
 		initialConfig(c),
 		environment(),
-		vars(vh)
+		vars(vh),
+		progress(0, jobs) /* progress average over the last jobs commands */
 	{
 		this->vars.addDynamicVariable("?");
 		this->vars.addDynamicVariable("*");
@@ -150,6 +153,7 @@ public:
 			shellCmdLine = std::string("cmd.exe");
 		}
 		shellCmdLine += " /c {?}";
+		defaultShell.outputEncoding = Shell::UTF8;
 		defaultShell.raw = true;
 #else /* non Windows */
 		boost::optional<const StringLiteral &> usedShell = vh.get("SHELL");
@@ -163,14 +167,20 @@ public:
 		shellCmdLine += " -c \"{?}\"";
 		defaultShell.addReplacement("/\\\\/\\\\");
 		defaultShell.addReplacement("/\"/\\\"");
+		defaultShell.outputEncoding = Shell::UTF8;
 		defaultShell.raw = false;
 #endif /* Windows */
 		defaultShell.cmdLine = StringLiteral(
 			shellCmdLine,
 			pp::LineInfo(),
+#ifdef _MSC_VER
+			/* workaround for MSVC compiler bug (@see https://connect.microsoft.com/VisualStudio/feedback/details/529700/enum-operator-overloading-broken) */
+			static_cast<pp::StringLiteral::ParsingFlags>(static_cast<int>(pp::StringLiteral::STANDARD) | static_cast<int>(pp::StringLiteral::NO_ESCAPE))
+#else
 			pp::StringLiteral::STANDARD | pp::StringLiteral::NO_ESCAPE
+#endif
 		);
-		shells["default"] = defaultShell;
+		this->shells["default"] = boost::make_shared<Shell>(defaultShell);
 	}
 	
 	void reset();

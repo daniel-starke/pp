@@ -3,14 +3,14 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-10-29
+ * @version 2016-11-20
  */
 #ifndef __PP_PROCESSBLOCK_HPP__
 #define __PP_PROCESSBLOCK_HPP__
 
 
 #include <cstdlib>
-#include <iosfwd>
+#include <iostream>
 #include <string>
 #include <boost/asio.hpp>
 #include <boost/assign/list_of.hpp>
@@ -36,6 +36,7 @@
 #include "Command.hpp"
 #include "Variable.hpp"
 #include "Type.hpp"
+#include "Utility.hpp"
 
 
 namespace pp {
@@ -65,6 +66,7 @@ private:
 	PathVariableMap dependencies; /**< Map of additional dependency files by variable name -> path. */
 	CommandVector commands; /**< List of commands associated to this process block. */
 	boost::wregex filter; /**< Input file filter as regular expression. */
+	std::string filterStr; /**< Input file filter as string. */
 public:
 	/** Default constructor. */
 	explicit ProcessBlock():
@@ -90,7 +92,8 @@ public:
 			| boost::regex_constants::icase
 #endif /* PCF_IS_WIN */
 			| boost::regex_constants::no_except
-		)
+		),
+		filterStr(boost::locale::conv::utf_to_utf<char>(f))
 	{}
 	
 	/**
@@ -104,7 +107,8 @@ public:
 		destinations(o.destinations),
 		dependencies(o.dependencies),
 		commands(o.commands),
-		filter(o.filter)
+		filter(o.filter),
+		filterStr(o.filterStr)
 	{}
 	
 	/**
@@ -121,6 +125,7 @@ public:
 			this->dependencies = o.dependencies;
 			this->commands = o.commands;
 			this->filter = o.filter;
+			this->filterStr = o.filterStr;
 		}
 		return *this;
 	}
@@ -161,6 +166,7 @@ public:
 #endif /* PCF_IS_WIN */
 			| boost::regex_constants::no_except
 		);
+		this->filterStr = boost::locale::conv::utf_to_utf<char>(f);
 		return *this;
 	}
 	
@@ -214,8 +220,23 @@ public:
 		BOOST_FOREACH(const boost::shared_ptr<PathLiteral> & literal, in) {
 			const std::string str = literal->getString();
 			const std::wstring wstr = boost::locale::conv::utf_to_utf<wchar_t>(str);
+			const RegExNamedCaptureSet namedCaptures = getRegExCaptureNames(this->filterStr);
+			boost::wsmatch what;
 			
-			if ( boost::regex_match(wstr, this->filter) ) {
+			if ( boost::regex_match(wstr, what, this->filter) ) {
+				VariableMap captures;
+				/* overwrite previous captures with named captures from the input filter */
+				BOOST_FOREACH(const std::string & tag, namedCaptures) {
+					try {
+						const boost::wssub_match & match(what[tag]);
+						if ( match.matched ) {
+							captures[tag] = pcf::string::escapeCharacters(std::string(match.first, match.second), '\\', "\\\"");
+						}
+					} catch (...) {
+						/* ignore unknown captures */
+					}
+				}
+				literal->addRegexCaptures(captures);
 				filteredInput.push_back(literal);
 			}
 		}
@@ -317,7 +338,7 @@ public:
 	 * @return true on success, else false
 	 */
 	bool createTransitions(const PathLiteralPtrVector & input, ProcessTransitionVector & transitions, const Configuration & config) const {
-		boost::posix_time::ptime mostRecentChange;
+		boost::posix_time::ptime mostRecentChange, mostRecentDepChange;
 		bool allNeedsToBeBuild, outputDependsOnAll, isFirst;
 		ProcessTransitionVector thisTransitions;
 		PathLiteralPtrVector filteredInput;
@@ -328,7 +349,22 @@ public:
 			BOOST_FOREACH(const boost::shared_ptr<PathLiteral> & literal, input) {
 				const std::string str = literal->getString();
 				const std::wstring wstr = boost::locale::conv::utf_to_utf<wchar_t>(str);
-				if ( boost::regex_match(wstr, this->filter) ) {
+				const RegExNamedCaptureSet namedCaptures = getRegExCaptureNames(this->filterStr);
+				boost::wsmatch what;
+				if ( boost::regex_match(wstr, what, this->filter) ) {
+					VariableMap captures;
+					/* overwrite previous captures with named captures from the input filter */
+					BOOST_FOREACH(const std::string & tag, namedCaptures) {
+						try {
+							const boost::wssub_match & match(what[tag]);
+							if ( match.matched ) {
+								captures[tag] = pcf::string::escapeCharacters(std::string(match.first, match.second), '\\', "\\\"");
+							}
+						} catch (...) {
+							/* ignore unknown captures */
+						}
+					}
+					literal->addRegexCaptures(captures);
 					filteredInput.push_back(literal);
 				}
 			}
@@ -367,10 +403,12 @@ public:
 			BOOST_FOREACH(ProcessTransition & transition, thisTransitions) {
 				vars.addScope();
 				this->setDestinationVariables(vars);
-				this->addAdditionalDependencies(transition.dependency, vars);
+				this->addAdditionalDependencies(transition.dependency, vars, mostRecentDepChange);
 				boost::optional<VariableMap &> destFiles = vars.getCurrentScope();
 				if ( destFiles ) { /* always true here */
 					BOOST_FOREACH(const VariableMap::value_type & variable, *destFiles) {
+						/* exclude additional dependencies from destination file candidates (we still need them in vars for variable replacement) */
+						if (this->dependencies.find(variable.first) != this->dependencies.end()) continue;
 						const boost::filesystem::path path(variable.second.getString(), pcf::path::utf8);
 						transition.output.push_back(boost::make_shared<PathLiteral>(variable.second));
 						PathLiteral & output(*(transition.output.back()));
@@ -379,11 +417,29 @@ public:
 							output
 								.addFlags(PathLiteral::EXISTS)
 								.setLastModification(boost::posix_time::from_time_t(boost::filesystem::last_write_time(path)));
+							/* check if additional input dependency was modified */
+							if (( ! mostRecentDepChange.is_not_a_date_time() ) && pathElementWasModified(mostRecentDepChange, output.getLastModification())) {
+								if (config.verbosity >= VERBOSITY_DEBUG) {
+									std::cerr << this->lineInfo << ": Input dependency file was modified for target file: " << path.string(pcf::path::utf8) << std::endl;
+								}
+								output.addFlags(PathLiteral::MODIFIED);
+							}
+						} else {
+							if (config.verbosity >= VERBOSITY_DEBUG) {
+								std::cerr << this->lineInfo << ": Non-existing target file will be created: " << path.string(pcf::path::utf8) << std::endl;
+							}
 						}
 						if (( ! output.hasFlags(PathLiteral::EXISTS) ) || config.build) {
 							output.addFlags(PathLiteral::MODIFIED);
 							if ( config.build ) {
+								if (config.verbosity >= VERBOSITY_DEBUG) {
+									std::cerr << this->lineInfo << ": Build was forced for target file: " << path.string(pcf::path::utf8) << std::endl;
+								}
 								output.addFlags(PathLiteral::FORCED);
+							} else {
+								if (config.verbosity >= VERBOSITY_DEBUG) {
+									std::cerr << this->lineInfo << ": Missing target file: " << path.string(pcf::path::utf8) << std::endl;
+								}
 							}
 						}
 					}
@@ -411,7 +467,7 @@ public:
 				vars.set("?", *literal);
 				vars.addScope();
 				this->setDestinationVariables(vars);
-				this->addAdditionalDependencies(transition.dependency, vars);
+				this->addAdditionalDependencies(transition.dependency, vars, mostRecentDepChange);
 				boost::optional<VariableMap &> destFiles = vars.getCurrentScope();
 				if ( destFiles ) { /* always true here */
 					bool needsToBeBuild = false;
@@ -425,6 +481,8 @@ public:
 					if (isFirst || this->type != ALL) {
 						/* only the first set of destination files are set for type ALL */
 						BOOST_FOREACH(const VariableMap::value_type & variable, *destFiles) {
+							/* exclude additional dependencies from destination file candidates (we still need them in vars for variable replacement) */
+							if (this->dependencies.find(variable.first) != this->dependencies.end()) continue;
 							const PathVariableMap::const_iterator origDestinationFile = this->destinations.find(variable.first);
 							const boost::filesystem::path path(variable.second.getString(), pcf::path::utf8);
 							transition.output.push_back(boost::make_shared<PathLiteral>(variable.second));
@@ -440,21 +498,43 @@ public:
 								output
 									.addFlags(PathLiteral::EXISTS)
 									.setLastModification(boost::posix_time::from_time_t(boost::filesystem::last_write_time(path)));
-								if ( ! literal->getLastModification().is_not_a_date_time() ) {
-									if (literal->getLastModification() > output.getLastModification()) {
-										output.addFlags(PathLiteral::MODIFIED);
+								if (( ! literal->getLastModification().is_not_a_date_time() ) && pathElementWasModified(literal->getLastModification(), output.getLastModification())) {
+									output.addFlags(PathLiteral::MODIFIED);
+									if (config.verbosity >= VERBOSITY_DEBUG) {
+										std::cerr << this->lineInfo << ": Input file \"" << literal->getString() << "\" was modified for target file: " << path.string(pcf::path::utf8) << std::endl;
+									}
+								}
+								/* check if additional input dependency was modified */
+								if (( ! mostRecentDepChange.is_not_a_date_time() ) && pathElementWasModified(mostRecentDepChange, output.getLastModification())) {
+									output.addFlags(PathLiteral::MODIFIED);
+									if (config.verbosity >= VERBOSITY_DEBUG) {
+										std::cerr << this->lineInfo << ": Input dependency file was modified for target file: " << path.string(pcf::path::utf8) << std::endl;
 									}
 								}
 							} else if ( output.hasFlags(PathLiteral::TEMPORARY) ) {
-								/* non-existing temporary output keeps track of most recent input modification to aid temporary creation decision */
-								output.setLastModification(mostRecentChange);
+								/* non-existing temporary output keeps track of most recent input/dependency modification to aid temporary creation decision */
+								if (( ! (mostRecentChange.is_not_a_date_time() || mostRecentDepChange.is_not_a_date_time()) ) && mostRecentDepChange > mostRecentChange) {
+									output.setLastModification(mostRecentDepChange);
+								} else {
+									output.setLastModification(mostRecentChange);
+								}
+							} else {
+								if (config.verbosity >= VERBOSITY_DEBUG) {
+									std::cerr << this->lineInfo << ": Non-existing target file will be created: " << path.string(pcf::path::utf8) << std::endl;
+								}
 							}
 							/* output needs to be build */
 							if (config.build || literal->hasFlags(PathLiteral::FORCED)) {
 								output.addFlags(PathLiteral::FORCED | PathLiteral::MODIFIED);
+								if (config.verbosity >= VERBOSITY_DEBUG) {
+									std::cerr << this->lineInfo << ": Missing target file: " << path.string(pcf::path::utf8) << std::endl;
+								}
 							}
 							if ( needsToBeBuild ) {
 								output.addFlags(PathLiteral::MODIFIED);
+								if (config.verbosity >= VERBOSITY_DEBUG) {
+									std::cerr << this->lineInfo << ": Input file was modified for target file: " << path.string(pcf::path::utf8) << std::endl;
+								}
 							}
 						}
 						/* add commands to perform the transition (even if no output file is created) */
@@ -502,17 +582,17 @@ private:
 	 * @param[in,out] target - add dependency files to this vector
 	 * @param[in,out] vars - add dependency files to the variable handle and use included variables
 	 * to substitute referenced variables
+	 * @param[out] mostRecentChange - output variable for the most recent change as date time
 	 * @param[in] variableChecking - enable strong variable checking
 	 */
-	void addAdditionalDependencies(PathLiteralPtrVector & target, VariableHandler & vars, const bool variableChecking = true) const {
+	void addAdditionalDependencies(PathLiteralPtrVector & target, VariableHandler & vars, boost::posix_time::ptime & mostRecentChange, const bool variableChecking = true) const {
 		BOOST_FOREACH(const PathVariableMap::value_type & variable, this->dependencies) {
 			/* included variable references are automatically replaces */
 			VariableHandler::Checking checking = VariableHandler::CHECKING_WARN;
 			if ( variableChecking ) {
 				checking = VariableHandler::CHECKING_ERROR;
 			}
-			vars.set(variable.first, variable.second, checking);
-			target.push_back(boost::make_shared<PathLiteral>(variable.second));
+			target.push_back(boost::make_shared<PathLiteral>(vars.set(variable.first, variable.second, checking)));
 			const std::string depFileStr(target.back()->getString());
 			const boost::filesystem::path path(depFileStr, pcf::path::utf8);
 			if ( boost::filesystem::exists(path) ) {
@@ -520,6 +600,9 @@ private:
 				output
 					.addFlags(PathLiteral::EXISTS)
 					.setLastModification(boost::posix_time::from_time_t(boost::filesystem::last_write_time(path)));
+				if (mostRecentChange.is_not_a_date_time() || mostRecentChange < output.getLastModification()) {
+					mostRecentChange = output.getLastModification();
+				}
 			} else {
 				BOOST_THROW_EXCEPTION(
 					pcf::exception::FileNotFound()

@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2013-2016 Daniel Starke
  * @date 2013-06-25
- * @version 2016-05-01
+ * @version 2016-11-20
  * @see http://2π.com/11/variable-sized-integers
  */
 #ifndef __LIBPCFXX_DATA_OCTETBLOCK_HPP__
@@ -112,7 +112,7 @@ public:
 		boost::uint64_t result;
 		result = static_cast<boost::uint64_t>(firstOctet & (0xFF >> octetCount));
 		for (size_t i = 1; i < octetCount; i++) {
-			result = (result << 8) | static_cast<boost::uint64_t>(Base::operator [](index + i));
+			result = (result << 8) | static_cast<boost::uint64_t>(Base::operator[] (index + i));
 		}
 		return result;
 	}
@@ -128,12 +128,12 @@ public:
 	void setUncheckedVarIntBE(const Base::size_type index, const size_t octetCount, const boost::uint64_t value) {
 		const boost::uint64_t mask(0xFF >> octetCount);
 		boost::uint64_t tmp(value);
-		Base::operator [](index) = static_cast<Base::value_type>(1 << (8 - octetCount));
+		Base::operator[] (index) = static_cast<Base::value_type>(1 << (8 - octetCount));
 		for (size_t i = 1; i < octetCount; i++) {
-			Base::operator [](index + octetCount - i) = static_cast<Base::value_type>(tmp & 0xFF);
+			Base::operator[] (index + octetCount - i) = static_cast<Base::value_type>(tmp & 0xFF);
 			tmp >>= 8;
 		}
-		Base::operator [](index) |= static_cast<Base::value_type>(tmp & mask);
+		Base::operator[] (index) |= static_cast<Base::value_type>(tmp & mask);
 	}
 	
 	/**
@@ -173,7 +173,7 @@ public:
 				<< pcf::exception::tag::Message("Trying to read beyond the end.")
 			);
 		}
-		const Base::value_type firstOctet(Base::operator [](index));
+		const Base::value_type firstOctet(Base::operator[] (index));
 		const size_t octetCount = static_cast<size_t>(PCF_LEADING_ZEROS32(static_cast<boost::uint32_t>(firstOctet))) - 23;
 		if ((index + octetCount) > currentSize) {
 			BOOST_THROW_EXCEPTION(
@@ -371,7 +371,7 @@ public:
 		bool found(false);
 		for (size_t i = 1; i <= 9; i++) {
 			if (i > currentSize) break;
-			const Base::value_type firstOctet(Base::operator [](currentSize - i));
+			const Base::value_type firstOctet(Base::operator[] (currentSize - i));
 			const size_t octetCount = static_cast<size_t>(PCF_LEADING_ZEROS32(static_cast<boost::uint32_t>(firstOctet))) - 23;
 			if (octetCount == i) {
 				const uint64_t tmp = this->getUncheckedVarIntBE(currentSize - i, octetCount, firstOctet);

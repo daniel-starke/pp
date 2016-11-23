@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-09-17
- * @version 2016-05-01
+ * @version 2016-11-19
  */
 #ifndef __PP_SHELL_HPP__
 #define __PP_SHELL_HPP__
@@ -26,6 +26,14 @@ namespace pp {
  */
 struct Shell {
 	/**
+	 * Data encoding types.
+	 */
+	enum Encoding {
+		UTF8,
+		UTF16
+	};
+	
+	/**
 	 * Structure to hold a single replacement.
 	 */
 	struct Replacement {
@@ -36,6 +44,7 @@ struct Shell {
 	boost::filesystem::path path; /**< Path to the shell binary. */
 	StringLiteral cmdLine; /**< Command-line with {*} or {@*} for the parameters. */
 	std::vector<Replacement> replacement; /**< List of replacement patterns. */
+	Encoding outputEncoding; /**< Assume this encoding for the command output. */
 	bool raw; /**< True if the command-line shall not be quoted like in Linux before passing it to the shell. */
 	
 	bool addReplacement(const std::string & pattern);

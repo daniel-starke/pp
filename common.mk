@@ -1,7 +1,7 @@
 APPS = pp
 
-pp_version = 1.1.0
-pp_version_date = 2016-11-02
+pp_version = 1.2.0
+pp_version_date = 2016-11-23
 pp_author = Daniel Starke
 
 CPPFLAGS += '-DPP_VERSION="$(pp_version) ($(pp_version_date))"' '-DPP_AUTHOR="$(pp_author)"'
@@ -80,6 +80,7 @@ $(DSTDIR)/pp/Execution$(OBJEXT): \
 	$(SRCDIR)/pp/ProcessNode.hpp \
 	$(SRCDIR)/pp/Shell.hpp \
 	$(SRCDIR)/pp/Type.hpp \
+	$(SRCDIR)/pp/Utility.hpp \
 	$(SRCDIR)/pp/Variable.hpp
 $(DSTDIR)/pp/Script$(OBJEXT): \
 	$(SRCDIR)/pp/parser/Script.hpp \
@@ -94,6 +95,7 @@ $(DSTDIR)/pp/Script$(OBJEXT): \
 	$(SRCDIR)/pp/Script.hpp \
 	$(SRCDIR)/pp/Shell.hpp \
 	$(SRCDIR)/pp/Type.hpp \
+	$(SRCDIR)/pp/Utility.hpp \
 	$(SRCDIR)/pp/Variable.hpp
 $(DSTDIR)/pp/Shell$(OBJEXT): \
 	$(SRCDIR)/pp/Shell.cpp \
@@ -123,6 +125,7 @@ $(DSTDIR)/pp$(OBJEXT): \
 	$(SRCDIR)/pp/Script.hpp \
 	$(SRCDIR)/pp/Shell.hpp \
 	$(SRCDIR)/pp/Type.hpp \
+	$(SRCDIR)/pp/Utility.hpp \
 	$(SRCDIR)/pp/Variable.hpp \
 	$(SRCDIR)/posix_main.hpp \
 	$(SRCDIR)/pp.cpp \

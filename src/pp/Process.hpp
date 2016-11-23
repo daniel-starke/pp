@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-10-30
+ * @version 2016-11-18
  */
 #ifndef __PP_PROCESS_HPP__
 #define __PP_PROCESS_HPP__
@@ -167,6 +167,7 @@ public:
 	 */
 	void reset() {
 		boost::mutex::scoped_lock lock(this->mutex);
+		this->transitions.clear();
 		this->transitionsInQueue = 0;
 		this->state = IDLE;
 	}
@@ -224,7 +225,7 @@ public:
 	 * @return true on success, else false
 	 * @see createInitialInputList()
 	 */
-	bool createInitialInputListFromFile(const std::string & inFile, const LineInfo & li, PathLiteralPtrVector & input) {
+	bool createInitialInputListFromFile(const std::string & inFile, const LineInfo & li, PathLiteralPtrVector & input) const {
 		const boost::filesystem::path inputFile(inFile.substr(1), pcf::path::utf8);
 		if ( ! (boost::filesystem::exists(inputFile) && boost::filesystem::is_regular_file(inputFile)) ) {
 			std::ostringstream sout;
@@ -278,9 +279,9 @@ public:
 	 * @return true on success, else false
 	 * @see createInitialInputList()
 	 */
-	bool createInitialInputListFromRegEx(const std::string & inRegEx, const LineInfo & li, PathLiteralPtrVector & input) {
+	bool createInitialInputListFromRegEx(const std::string & inRegEx, const LineInfo & li, PathLiteralPtrVector & input) const {
 		std::vector<boost::filesystem::path> pathList;
-		const std::wstring inRegExW(boost::locale::conv::utf_to_utf<wchar_t>(inRegEx));
+		const std::wstring inRegExW(boost::locale::conv::utf_to_utf<wchar_t>(reduceConsecutiveSlashes(inRegEx)));
 		try {
 			boost::wregex regex(
 				inRegExW,
@@ -289,7 +290,7 @@ public:
 				| boost::regex_constants::icase
 #endif /* PCF_IS_WIN */
 			);
-			RegExNamedCaptureSet namedCaptures = getRegExCaptureNames(inRegEx);
+			const RegExNamedCaptureSet namedCaptures = getRegExCaptureNames(inRegEx);
 			try {
 				pcf::path::getRegexPathList(pathList, inRegExW, this->config.fullRecursiveMatch);
 			} catch (const boost::regex_error & e) {
@@ -312,33 +313,34 @@ public:
 			BOOST_FOREACH(const boost::filesystem::path & p, pathList) {
 				const std::string str(pcf::path::correctSeparator(p).string(pcf::path::utf8));
 				const std::wstring wstr(pcf::path::correctSeparator(p).wstring(pcf::path::utf8));
-				input.push_back(boost::make_shared<PathLiteral>(str, this->lineInfo, StringLiteral::RAW));
 				boost::wsmatch what;
-				if ( boost::regex_match(wstr, what, regex) ) {
-					if ( ! what.empty() ) {
-						VariableMap captures;
-						for (int i = 0; i < static_cast<int>(what.size()); i++) {
-							const boost::wssub_match & match(what[i]);
-							if ( match.matched ) {
-								captures[boost::lexical_cast<std::string>(i)] = pcf::string::escapeCharacters(std::string(match.first, match.second), '\\', "\\\"");
-							}
+				if (boost::regex_match(wstr, what, regex) && ( ! what.empty() )) {
+					input.push_back(boost::make_shared<PathLiteral>(str, this->lineInfo, StringLiteral::RAW));
+					VariableMap captures;
+					for (int i = 0; i < static_cast<int>(what.size()); i++) {
+						const boost::wssub_match & match(what[i]);
+						if ( match.matched ) {
+							captures[boost::lexical_cast<std::string>(i)] = pcf::string::escapeCharacters(std::string(match.first, match.second), '\\', "\\\"");
 						}
-						BOOST_FOREACH(const std::string & tag, namedCaptures) {
-							try {
-								const boost::wssub_match & match(what[tag]);
-								if ( match.matched ) {
-									captures[tag] = pcf::string::escapeCharacters(std::string(match.first, match.second), '\\', "\\\"");
-								}
-							} catch (...) {
-								/* ignore unknown captures */
-							}
-						}
-						input
-							.back()
-							->setFlags(PathLiteral::PERMANENT | PathLiteral::EXISTS)
-							.setLastModification(boost::posix_time::from_time_t(boost::filesystem::last_write_time(p)))
-							.setRegexCaptures(captures);
 					}
+					BOOST_FOREACH(const std::string & tag, namedCaptures) {
+						try {
+							const boost::wssub_match & match(what[tag]);
+							if ( match.matched ) {
+								captures[tag] = pcf::string::escapeCharacters(std::string(match.first, match.second), '\\', "\\\"");
+							}
+						} catch (...) {
+							/* ignore unknown captures */
+						}
+					}
+					input
+						.back()
+						->setFlags(PathLiteral::PERMANENT | PathLiteral::EXISTS)
+						.setLastModification(boost::posix_time::from_time_t(boost::filesystem::last_write_time(p)))
+						.setRegexCaptures(captures);
+				} else if (this->config.verbosity >= VERBOSITY_WARN) {
+					std::cerr << li << ": Warning: Previously found input file ignored after strict mismatch: " << str << std::endl;
+					std::cerr << li << ": Hint: Check mismatching regular expression for multiple separators or relative path elements." << std::endl;
 				}
 			}
 		} catch (const boost::regex_error & e) {
@@ -519,10 +521,15 @@ public:
 		const std::string innerPrefix(prefix + "\t");
 		out << prefix << "process : " << this->id << " {\n";
 		BOOST_FOREACH(const ProcessTransition & transition, this->transitions) {
-			if ( this->transitionNeedsBuild(transition) ) {
+			int reasonFlags;
+			if ( this->transitionNeedsBuild(transition, reasonFlags) ) {
 				BOOST_FOREACH(const Command & command, transition.commands) {
 					StringLiteral thisCommand(command.getFinalCommandString());
-					out << innerPrefix << thisCommand << "\n";
+					out << innerPrefix << '['
+						<< ProcessTransition::reasonMap[0][(reasonFlags & (1 << 0)) == 0 ? 0 : 1]
+						<< ProcessTransition::reasonMap[1][(reasonFlags & (1 << 1)) == 0 ? 0 : 1]
+						<< ProcessTransition::reasonMap[2][(reasonFlags & (1 << 2)) == 0 ? 0 : 1]
+						<< "] " << thisCommand << "\n";
 				}
 			}
 		}
@@ -577,10 +584,11 @@ public:
 		}
 		/* print command results finally */
 		BOOST_FOREACH(const ProcessTransition & transition, this->transitions) {
-			if (this->transitionNeedsBuild(transition) && transition.missingInput.empty()) {
+			int reasonFlags;
+			if (this->transitionNeedsBuild(transition, reasonFlags) && transition.missingInput.empty()) {
 				/* command was only executed if no missing input dependency was given */
 				BOOST_FOREACH(const Command & command, transition.commands) {
-					command.printResults(out, wroteOutput);
+					command.printResults(out, wroteOutput, reasonFlags);
 				}
 			}
 		}
@@ -745,24 +753,53 @@ private:
 	 * @return true if it needs to be processed, else false
 	 */
 	bool transitionNeedsBuild(const ProcessTransition & transition) const {
-		if ( this->config.build ) return true;
+		int flags;
+		return this->transitionNeedsBuild(transition, flags);
+	}
+	
+	/**
+	 * Helper method to decide whether a transition needs to be build or not.
+	 *
+	 * @param[in] transition - check for this transition
+	 * @param[out] flags - sets the path flags for the given transition (@see ProcessTransition::Reason)
+	 * @return true if it needs to be processed, else false
+	 */
+	bool transitionNeedsBuild(const ProcessTransition & transition, int & flags) const {
+		flags = 0;
+		if ( this->config.build ) {
+			flags |= (1 << ProcessTransition::FORCED);
+			return true;
+		}
 		/* always perform transition if no output is set */
-		if ( transition.output.empty() ) return true;
+		if ( transition.output.empty() ) {
+			flags |= (1 << ProcessTransition::MISSING);
+			return true;
+		}
 		/* perform transition if a dependent input file has changed or does not exist */
 		BOOST_FOREACH(const boost::shared_ptr<PathLiteral> & literal, transition.dependency) {
-			if (literal->hasFlags(PathLiteral::MODIFIED)
-				|| ( ! (literal->hasFlags(PathLiteral::EXISTS) || literal->hasFlags(PathLiteral::TEMPORARY)) )
-				|| literal->hasFlags(PathLiteral::FORCED)) {
-				return true;
+			if ( literal->hasFlags(PathLiteral::MODIFIED) ) {
+				flags |= (1 << ProcessTransition::CHANGED);
 			}
+			if ( ! (literal->hasFlags(PathLiteral::EXISTS) || literal->hasFlags(PathLiteral::TEMPORARY)) ) {
+				flags |= (1 << ProcessTransition::MISSING);
+			}
+			if ( literal->hasFlags(PathLiteral::FORCED) ) {
+				flags |= (1 << ProcessTransition::FORCED);
+			}
+			if (flags != 0) return true;
 		}
 		/* check if output exists */
 		BOOST_FOREACH(const boost::shared_ptr<PathLiteral> & literal, transition.output) {
-			if (literal->hasFlags(PathLiteral::MODIFIED)
-				|| ( ! (literal->hasFlags(PathLiteral::EXISTS) || literal->hasFlags(PathLiteral::TEMPORARY)) )
-				|| literal->hasFlags(PathLiteral::FORCED)) {
-				return true;
+			if ( literal->hasFlags(PathLiteral::MODIFIED) ) {
+				flags |= (1 << ProcessTransition::CHANGED);
 			}
+			if ( ! (literal->hasFlags(PathLiteral::EXISTS) || literal->hasFlags(PathLiteral::TEMPORARY)) ) {
+				flags |= (1 << ProcessTransition::MISSING);
+			}
+			if ( literal->hasFlags(PathLiteral::FORCED) ) {
+				flags |= (1 << ProcessTransition::FORCED);
+			}
+			if (flags != 0) return true;
 		}
 		return false;
 	}

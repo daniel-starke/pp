@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-11-27
- * @version 2016-05-01
+ * @version 2016-11-20
  * @brief Enables if pragma statements with ifPragma(if, expr, then, [elseif], [else], [block-skipper], end)[block]
  * and expectIfPragma(if, expr, then, [elseif], [else], [block-skipper], end)[block].
  * @remarks Extension to the Boost Spirit2 parser framework.
@@ -290,6 +290,7 @@ private:
 					savedPos = first;
 					if ( endParser.parse(first, last, context, skipper, boost::spirit::unused) ) {
 						depth--;
+						continue; /* keep block skipper from consuming following ends */
 					} else {
 						first = savedPos;
 					}
@@ -432,7 +433,7 @@ struct make_directive<
 	
 	/** this is the factory function object invoked in order to create an instance of the IfPragmaDirective */
 	template <typename Terminal>
-	result_type operator ()(const Terminal & term, const Subject & subject, const Modifiers & modifiers) const {
+	result_type operator() (const Terminal & term, const Subject & subject, const Modifiers & modifiers) const {
 		return result_type(
 			subject,
 			compile<qi::domain>(fusion::at_c<0>(fusion::at_c<0>(term.args)), modifiers),

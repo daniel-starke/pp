@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-24
- * @version 2016-05-01
+ * @version 2016-11-16
  */
 #ifndef __PP_HPP__
 #define __PP_HPP__
@@ -35,7 +35,7 @@ namespace fs = ::boost::filesystem;
 namespace po = ::boost::program_options;
 
 
-void terminate(boost::asio::io_service & ios, boost::scoped_ptr<boost::asio::io_service::work> & wn);
+void terminate(boost::asio::io_service & ios, boost::scoped_ptr<boost::asio::io_service::work> & wn, volatile bool & stopped, const bool outputInfo);
 void printHelp();
 void printLicense();
 

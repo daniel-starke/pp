@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-05-01
+ * @version 2016-11-20
  */
 #ifndef __PP_TYPE_HPP__
 #define __PP_TYPE_HPP__
@@ -17,6 +17,7 @@
 #include <boost/function.hpp>
 #include <boost/optional.hpp>
 #include <boost/regex.hpp>
+#include <boost/shared_ptr.hpp>
 #include "Variable.hpp"
 #include "Shell.hpp"
 
@@ -58,7 +59,7 @@ enum Verbosity {
 
 /* type definitions */
 typedef std::set<std::string> MissingInputSet;
-typedef std::map<std::string, Shell> ShellMap;
+typedef std::map< std::string, boost::shared_ptr<Shell> > ShellMap;
 typedef std::vector<Command> CommandVector;
 typedef std::vector<ProcessBlock> ProcessBlockVector;
 typedef std::vector<ProcessTransition> ProcessTransitionVector;
@@ -71,9 +72,12 @@ typedef boost::function2<void, const bool, const boost::uint64_t> ProgressCallba
 
 
 /* functions */
-std::istream & operator >>(std::istream & in, Verbosity & out);
-std::ostream & operator <<(std::ostream & out, const Verbosity in);
-bool operator <(const Verbosity lhs, const Verbosity rhs);
+std::istream & operator>> (std::istream & in, Verbosity & out);
+std::ostream & operator<< (std::ostream & out, const Verbosity in);
+#ifndef _MSC_VER
+/* unsupported in MSVC (@see https://connect.microsoft.com/VisualStudio/feedback/details/529700/enum-operator-overloading-broken) */
+bool operator< (const Verbosity lhs, const Verbosity rhs);
+#endif
 
 
 /* classes */
@@ -86,6 +90,13 @@ struct ProcessTransition {
 	PathLiteralPtrVector output; /**< Output file list. */
 	MissingInputSet missingInput; /**< Missing input files after execution. */
 	CommandVector commands; /**< Commands to be executed to perform this transition. */
+	/** Reason flag bit positions for transitions. */
+	enum Reason {
+		FORCED, /**< Transition is/was forced. */
+		MISSING, /**< Output or intermediate input is/was missing. */
+		CHANGED /**< Input dependency was changed. */
+	};
+	static const char reasonMap[3][2];
 };
 
 

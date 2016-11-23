@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-11-25
- * @version 2016-05-01
+ * @version 2016-11-20
  * @brief Enables expression naming by string as name(string)[p] for easier expectation handling.
  * @remarks Extension to the Boost Spirit2 parser framework.
  */
@@ -131,7 +131,7 @@ struct make_directive<
 	
 	/** this is the factory function object invoked in order to create an instance of the NameDirective */
 	template <typename Terminal>
-	result_type operator ()(const Terminal & term, const Subject & subject, unused_type) const {
+	result_type operator() (const Terminal & term, const Subject & subject, unused_type) const {
 		return result_type(subject, fusion::at_c<0>(term.args));
 	}
 };

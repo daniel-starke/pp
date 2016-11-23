@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-05-01
+ * @version 2016-11-18
  */
 #include <fstream>
 #include <sstream>
@@ -11,6 +11,7 @@
 #include <boost/phoenix/bind.hpp>
 #include <boost/phoenix/core.hpp>
 #include "Execution.hpp"
+#include "Utility.hpp"
 
 
 namespace pp {
@@ -22,9 +23,10 @@ namespace {
 /**
  * Local function to update the temporary creation flags.
  *
+ * @param[in] verbosity - verbosity level
  * @param[in] temporaryFileInfoMap - update all entries in this map
  */
-static void updateTemporaryCreationFlags(const TemporaryFileInfoMap & temporaryFileInfoMap) {
+static void updateTemporaryCreationFlags(const TemporaryFileInfoMap & temporaryFileInfoMap, const Verbosity verbosity) {
 	/* update PathLiteral::FORCED flag for each temporary within the provided map */
 	BOOST_FOREACH(const TemporaryFileInfoMap::value_type & keyValue, temporaryFileInfoMap) {
 		/* early out if already set for creation */
@@ -35,14 +37,23 @@ static void updateTemporaryCreationFlags(const TemporaryFileInfoMap & temporaryF
 		if ( ! (keyValue.second.allInputExists && keyValue.second.allOutputExists) ) {
 			/* input or output file will be created */
 			keyValue.first->addFlags(PathLiteral::FORCED);
+			if (verbosity >= VERBOSITY_DEBUG) {
+				std::cerr << keyValue.first->getLineInfo() << ": Non-existing temporary target file will be created: " << keyValue.first->getString() << std::endl;
+			}
 			continue;
-		} else if (keyValue.second.oldestOutputChange < keyValue.second.mostRecentInputChange) {
+		} else if ( pathElementWasModified(keyValue.second.mostRecentInputChange, keyValue.second.oldestOutputChange) ) {
 			/* input/output files all exist but input is younger than output */
 			keyValue.first->addFlags(PathLiteral::FORCED | PathLiteral::MODIFIED);
+			if (verbosity >= VERBOSITY_DEBUG) {
+				std::cerr << keyValue.first->getLineInfo() << ": Temporary target file will be created due to changed input file: " << keyValue.first->getString() << std::endl;
+			}
 			continue;
 		} else if ( keyValue.second.inputWasModified ) {
 			/* permanent input dependency was/will be modified */
 			keyValue.first->addFlags(PathLiteral::FORCED | PathLiteral::MODIFIED);
+			if (verbosity >= VERBOSITY_DEBUG) {
+				std::cerr << keyValue.first->getLineInfo() << ": Temporary target file will be created due to changed input dependency: " << keyValue.first->getString() << std::endl;
+			}
 			continue;
 		}
 	}
@@ -108,6 +119,10 @@ bool Execution::prepare(const ProgressCallback & callProgress) {
 	this->flatDependentMap.clear();
 	this->temporaryFileInfoMap.clear();
 	
+	/* reset process nodes */
+	BOOST_FOREACH(ProcessNode & node, this->processes) {
+		node.traverseTopDown(boost::phoenix::bind<bool>(&Execution::resetProcessNode, _1, _2));
+	}
 	/* resolve dependencies */
 	BOOST_FOREACH(ProcessNode & node, this->processes) {
 		node.traverseDependencies(
@@ -123,9 +138,10 @@ bool Execution::prepare(const ProgressCallback & callProgress) {
 	BOOST_FOREACH(ProcessNode & node, this->processes) {
 		node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::checkDuplicates, _1, _2, boost::phoenix::ref(duplicates)));
 		if ( ! duplicates.empty() ) {
-			std::cerr << "Error: Same destination path for different inputs. Destination paths:" << std::endl;
-			BOOST_FOREACH(const boost::shared_ptr<PathLiteral> & p, duplicates) {
-				std::cerr << '\t' << p->getString() << std::endl;
+			std::cerr << "Error: Same destination path for different inputs. Destination paths (reduced list):" << std::endl;
+			const std::set<boost::shared_ptr<PathLiteral>, LessPathLiteralPtrValueLocation> dups(duplicates.begin(), duplicates.end());
+			BOOST_FOREACH(const boost::shared_ptr<PathLiteral> & p, dups) {
+				std::cerr << p->getLineInfo() << ": " << p->getString() << std::endl;
 			}
 			return false;
 		}
@@ -140,7 +156,7 @@ bool Execution::prepare(const ProgressCallback & callProgress) {
 			node.traverseTopDown(boost::phoenix::bind<bool>(&Execution::createTemporaryOutputFileInfoMap, this, _1, _2));
 		}
 		/* update temporary creation flag based on just created helper map */
-		updateTemporaryCreationFlags(this->temporaryFileInfoMap);
+		updateTemporaryCreationFlags(this->temporaryFileInfoMap, this->config.verbosity);
 		/* propagate PathLiteral::FORCED flag (set due to temporary creation check) */
 		BOOST_FOREACH(ProcessNode & node, this->processes) {
 			node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::propagateForcedFlag, this, _1, _2));
@@ -153,7 +169,7 @@ bool Execution::prepare(const ProgressCallback & callProgress) {
 			node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::countCommands, _1, _2, callProgress));
 		}
 	}
-	return false;
+	return true;
 }
 
 
