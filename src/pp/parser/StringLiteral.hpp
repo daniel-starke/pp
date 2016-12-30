@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-10-31
- * @version 2016-11-13
+ * @version 2016-11-27
  */
 #ifndef __PP_PARSER_STRINGLITERAL_HPP__
 #define __PP_PARSER_STRINGLITERAL_HPP__
@@ -90,6 +90,7 @@ struct StringLiteral : qi::grammar<Iterator, StringLiteralCaptureVector(pp::Stri
 	qi::rule<Iterator, pp::StringLiteralList()> partList;
 	qi::rule<Iterator, pp::StringLiteralCapturePair(), qi::locals<pp::CaptureNameVector> > capture;
 	qi::rule<Iterator, pp::StringLiteralCaptureVector()> captureList;
+	qi::rule<Iterator, pp::StringLiteralCaptureVector()> defer;
 	qi::rule<Iterator, pp::StringLiteralCaptureVector(pp::StringLiteral::ParsingFlags, boost::optional<char>, bool)> startRule;
 	size_t captureIndex;
 	
@@ -99,6 +100,7 @@ struct StringLiteral : qi::grammar<Iterator, StringLiteralCaptureVector(pp::Stri
 	 * @param[in] parsingFlags - flags for string literal parsing
 	 * @param[in] eoic - optional end of input character
 	 * @param[in] pe - true to print errors to the standard output console, false to throw an exception instead
+	 * @param[in] frm - true to enable full recursive match in :rexists, false to match per path element
 	 */
 	StringLiteral(const pp::StringLiteral::ParsingFlags parsingFlags = pp::StringLiteral::STANDARD, const boost::optional<char> & eoic = boost::optional<char>(), const bool pe = false, const bool frm = false):
 		StringLiteral::base_type(startRule, "string literal"),
@@ -119,6 +121,8 @@ struct StringLiteral : qi::grammar<Iterator, StringLiteralCaptureVector(pp::Stri
 		using qi::_b;
 		using qi::_c;
 		using qi::_r1;
+		using qi::_r2;
+		using qi::_r3;
 		using qi::_val;
 		using qi::as_string;
 		using qi::int_;
@@ -134,6 +138,7 @@ struct StringLiteral : qi::grammar<Iterator, StringLiteralCaptureVector(pp::Stri
 		partList.name("string|{variable}");
 		capture.name("capture group");
 		captureList.name("capture list");
+		defer.name("string literal");
 		
 		/* normal string literal omitting their match */
 #define MAKE_LITERAL(var, x, y) \
@@ -196,11 +201,16 @@ struct StringLiteral : qi::grammar<Iterator, StringLiteralCaptureVector(pp::Stri
 				| string("file")     [_val = construct<StringLiteralFunctionPair>(_1, pp::StringLiteral::functionFile)]
 				| string("extension")[_val = construct<StringLiteralFunctionPair>(_1, pp::StringLiteral::functionExtension)]
 				| string("exists")   [_val = construct<StringLiteralFunctionPair>(_1, pp::StringLiteral::functionExists)]
-				| string("rexists")  [_val = phx::bind<StringLiteralFunctionPair>(&StringLiteral::getRExistsFunction, _1, _a, this->fullRecursiveMatch)]
+				| string("rexists")  [_val = phx::bind<StringLiteralFunctionPair>(&StringLiteral::getRExistsFunction, _1, _a, phx::ref(this->fullRecursiveMatch))]
 			))
 		);
 		
-		this->initGrammar(parsingFlags, eoic, true);
+		this->initGrammar(parsingFlags, eoic, this->fullRecursiveMatch, true);
+		
+		startRule %= (
+			eps[phx::bind(&StringLiteral::initGrammar, this, _r1, _r2, _r3, false)]
+			>> qi::lazy(phx::ref(defer))
+		);
 	}
 
 private:
@@ -223,9 +233,6 @@ private:
 		using phx::size;
 		using phx::val;
 		using qi::_a;
-		using qi::_r1;
-		using qi::_r2;
-		using qi::_r3;
 		using qi::_val;
 		using qi::_1;
 		using qi::_2;
@@ -347,17 +354,15 @@ private:
 				>> partList[_val = construct<pp::StringLiteralCapturePair>(_a, _1)]
 			);
 			
-			captureList = *capture;
+			captureList = !endOfInput >> *capture;
 		}
 		
-		startRule %= (
-			eps[phx::bind(&StringLiteral::initGrammar, this, _r1, _r2, _r3, false)] >> !endOfInput >> captureList
-		);
+		defer = captureList.alias();
 		
 		if ( this->printError ) {
 			on_error<fail>(
-				startRule,
-				phx::ref(std::cout) << "Error: Failed to parse string literal." << std::endl
+				defer,
+				phx::ref(std::cerr) << "Error: Failed to parse string literal." << std::endl
 				<< construct<std::string>(_1, _2) << std::endl
 				<< construct<std::string>(size(construct<std::string>(_1, _3)), ' ') << "^- expected '" << getTag(_4) << "' here" << std::endl
 			);

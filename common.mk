@@ -1,7 +1,7 @@
 APPS = pp
 
-pp_version = 1.2.0
-pp_version_date = 2016-11-23
+pp_version = 1.3.0
+pp_version_date = 2016-12-30
 pp_author = Daniel Starke
 
 CPPFLAGS += '-DPP_VERSION="$(pp_version) ($(pp_version_date))"' '-DPP_AUTHOR="$(pp_author)"'
@@ -29,6 +29,10 @@ all: $(DSTDIR) $(LIBDIR) $(INCDIR) $(addprefix $(DSTDIR)/,$(addsuffix $(BINEXT),
 
 setup: all $(SCRIPTDIR)/setup.nsi
 	$(NSIS) //DVERSION=$(pp_version) $(SCRIPTDIR)/setup.nsi
+
+.PHONY: check
+check: script/perform-tests.sh
+	export "pp=$(DSTDIR)/pp$(BINEXT)"; $<
 
 .PHONY: $(DSTDIR)
 $(DSTDIR):

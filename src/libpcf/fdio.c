@@ -4,7 +4,7 @@
  * @copyright Copyright 2015-2016 Daniel Starke
  * @see fdio.h
  * @date 2015-02-28
- * @version 2016-11-13
+ * @version 2016-11-26
  */
 #define _POSIX_C_SOURCE 200809L
 #include <stdlib.h>
@@ -112,7 +112,7 @@ int fdio_closeNonDefFds() {
 	} else {
 		/* fallback */
 		int i;
-		int maxFd = sysconf(_SC_OPEN_MAX);
+		int maxFd = (int)sysconf(_SC_OPEN_MAX);
 		for (i = 3; i < maxFd; i++) close(i);
 	}
 	return 1;

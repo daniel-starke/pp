@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-11-02
+ * @version 2016-12-29
  */
 #ifndef __PP_PROCESSNODE_HPP__
 #define __PP_PROCESSNODE_HPP__
@@ -116,7 +116,7 @@ public:
 	
 	boost::optional<ValueType> value; /**< Optional leaf value. */
 	ParallelType parallel; /**< Parallel executable dependencies. */
-	DependencyType dependency; /**< Direct dependency which needs to finish beforehand. */
+	DependencyType dependency; /**< Direct dependencies which needs to finish beforehand in reverse order. */
 	
 	/** Default constructor. */
 	explicit ProcessNode() {}
@@ -186,7 +186,7 @@ public:
 			if ( ! node.traverseTopDown(callback, level + 1) ) return false;
 		}
 		/* call dependency */
-		BOOST_FOREACH(ProcessNode & node, this->dependency) {
+		BOOST_REVERSE_FOREACH(ProcessNode & node, this->dependency) {
 			if ( ! node.traverseTopDown(callback, level + 1) ) return false;
 		}
 		return true;
@@ -203,7 +203,7 @@ public:
 	bool traverseBottomUp(const SimpleCallbackType & callback, const size_t level = 0) {
 		if ( ! callback ) return false;
 		/* call dependency */
-		BOOST_FOREACH(ProcessNode & node, this->dependency) {
+		BOOST_REVERSE_FOREACH(ProcessNode & node, this->dependency) {
 			if ( ! node.traverseBottomUp(callback, level + 1) ) return false;
 		}
 		/* call parallel */
@@ -231,7 +231,12 @@ public:
 		PathLiteralPtrVector passingDeps;
 		/* call dependency */
 		if ( ! this->isLeaf() ) {
-			if ( ! this->dependency.front().traverseDependencies(callback, passingDeps, level + 1) ) return false;
+			BOOST_REVERSE_FOREACH(ProcessNode & node, this->dependency) {
+				/* output of previous dependency is input for next dependency or will be processed afterwards if no further dependency exists */
+				if ( ! passingDeps.empty() ) node.setDependencyInput(passingDeps);
+				passingDeps.clear();
+				if ( ! node.traverseDependencies(callback, passingDeps, level + 1) ) return false;
+			}
 		}
 		/* call parallel */
 		if ( ! this->parallel.empty() ) {
@@ -276,7 +281,7 @@ public:
 		lock.unlock();
 		/* execute dependency */
 		if ( ! this->isLeaf() ) {
-			if ( ! this->dependency.front().executeChain(callback, boost::phoenix::bind(&ProcessNode::executeParallel, this, callback, callNext)) ) return false;
+			if ( ! this->executeDependency(0, callback, callNext) ) return false;
 		} else if ( ! this->parallel.empty() ) {
 			/* execute parallel nodes */
 			if ( ! this->executeParallel(callback, callNext) ) return false;
@@ -335,8 +340,29 @@ private:
 			}
 		} else {
 			/* set dependent node */
-			this->dependency.front().setDependencyInput(input);
+			BOOST_REVERSE_FOREACH(ProcessNode & node, this->dependency) {
+				node.setDependencyInput(input);
+			}
 		}
+	}
+	
+	/**
+	 * Executes all dependent nodes in sequence or this node's dependent parallel nodes.
+	 *
+	 * @param[in] index - execute dependency with this index
+	 * @param[in] callback - function to call for execution
+	 * @param[in] callNext - function to call if all nodes finished execution
+	 * @return true on success, else false
+	 */
+	bool executeDependency(const size_t index, const ExecuteNodeCallbackType & callback, const ExecutionCallback & callNext) {
+		const size_t depCount = this->dependency.size();
+		if (index < depCount) {
+			/* execute dependencies in reverse order */
+			if ( ! this->dependency[depCount - index - 1].executeChain(callback, boost::phoenix::bind(&ProcessNode::executeDependency, this, index + 1, callback, callNext)) ) return false;
+		} else {
+			if ( ! this->executeParallel(callback, callNext) ) return false;
+		}
+		return true;
 	}
 	
 	/**

@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-11-18
+ * @version 2016-12-18
  */
 #ifndef __PP_PROCESS_HPP__
 #define __PP_PROCESS_HPP__
@@ -559,7 +559,7 @@ public:
 		/* print missing inputs first */
 		if ( ! missingInput.empty() ) {
 			BOOST_FOREACH(const MissingInputSet::value_type & mi, missingInput) {
-				out << "\nMissing input path: " << mi;
+				out << "\nError: Missing input path: " << mi;
 			}
 			out << '\n';
 			wroteOutput = true;
@@ -572,7 +572,7 @@ public:
 					/* we can even check temporary files because this is performed before they are deleted */
 					const std::string str(literal->getString());
 					if ( ! boost::filesystem::exists(boost::filesystem::path(str, pcf::path::utf8)) ) {
-						out << "\nMissing output path: " << str;
+						out << "\nError: Missing output path: " << str;
 						allOutputsOk = false;
 					}
 				}
@@ -833,7 +833,11 @@ private:
 		if (transition.missingInput.empty() && this->transitionNeedsBuild(transition)) {
 			/* execute substituted/prepared commands */
 			BOOST_FOREACH(Command & command, transition.commands) {
-				command.execute();
+				if (( ! command.execute(this->config.commandChecking) ) && this->config.commandChecking) {
+					boost::mutex::scoped_lock lock(this->mutex);
+					this->state = FAILED;
+					break;
+				}
 			}
 		}
 		if ( callProgress ) callProgress(true, static_cast<boost::uint64_t>(transition.commands.size()));
@@ -844,14 +848,14 @@ private:
 			if ( ioService.stopped() ) {
 				if (this->transitionsInQueue > 0) {
 					this->state = FAILED;
-				} else {
+				} else if (this->state != FAILED) {
 					this->state = FINISHED;
 				}
 				return;
 			}
 			if (this->transitionsInQueue > 0) this->transitionsInQueue--;
 			if (this->transitionsInQueue <= 0) {
-				this->state = FINISHED;
+				if (this->state != FAILED) this->state = FINISHED;
 				lock.unlock();
 				if (callNext ) callNext();
 			}

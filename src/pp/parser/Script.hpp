@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-10-31
- * @version 2016-11-23
+ * @version 2016-12-30
  */
 #ifndef __PP_PARSER_SCRIPT_HPP__
 #define __PP_PARSER_SCRIPT_HPP__
@@ -31,6 +31,7 @@
 #include <pcf/parser/spirit/Name.hpp>
 #include <pcf/path/Utility.hpp>
 #include "../Script.hpp"
+#include "../Utility.hpp"
 #include "StringLiteral.hpp"
 #include "Utility.hpp"
 
@@ -117,6 +118,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 	qi::rule<Iterator> booleanIsLike;
 	qi::rule<Iterator> booleanIsNotLike;
 	qi::rule<Iterator> forceBuild;
+	qi::rule<Iterator> invertFilter;
 	qi::rule<Iterator> beginProcessGroup;
 	qi::rule<Iterator> endProcessGroup;
 	qi::rule<Iterator> addDependencyOutput;
@@ -166,7 +168,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 	qi::rule<Iterator, pp::StringLiteral(), qi::locals<Iterator> > patternString;
 	qi::rule<Iterator, pp::StringLiteral(bool, bool), qi::locals<Iterator> > nonEmptyValueString;
 	qi::rule<Iterator, pp::StringLiteral(), qi::locals<Iterator> > matchAnyRegexString;
-	qi::rule<Iterator, pp::StringLiteral()> inputFileFilter;
+	qi::rule<Iterator, pp::StringLiteral(bool &)> inputFileFilter;
 	qi::rule<Iterator, void(), qi::locals<bool, Verbosity, Iterator, std::string>, Skipper> pragma;
 	qi::rule<Iterator, bool(), qi::locals<boost::optional<pp::StringLiteral> /* _a */, bool /* _b */>, Skipper> beCheck;
 	qi::rule<Iterator, bool(bool), Skipper> beAnd;
@@ -183,7 +185,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 	qi::rule<Iterator, std::string()> commandLineStart;
 	qi::rule<Iterator, std::string()> commandLineEnd;
 	qi::rule<Iterator, pp::Command(), qi::locals<Iterator> > command;
-	qi::rule<Iterator, pp::ProcessBlock(), qi::locals<ProcessBlock::Type, pp::StringLiteral>, Skipper> processBlock;
+	qi::rule<Iterator, pp::ProcessBlock(), qi::locals<ProcessBlock::Type, pp::StringLiteral, bool>, Skipper> processBlock;
 	qi::rule<Iterator, pp::Process *(), Skipper> processPragmaInclude;
 	qi::rule<Iterator, pp::Process(), Skipper> process;
 	qi::rule<Iterator, void(pp::StringLiteralVector &, bool &), Skipper> processParameterList;
@@ -290,6 +292,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 		MAKE_LITERAL(booleanIsLike, "~", '~');
 		MAKE_LITERAL(booleanIsNotLike, "!~", "!~");
 		MAKE_LITERAL(forceBuild, "!", '!');
+		MAKE_LITERAL(invertFilter, "!", '!');
 		MAKE_LITERAL(beginProcessGroup, "(", '(');
 		MAKE_LITERAL(endProcessGroup, ")", ')');
 		MAKE_LITERAL(addDependencyOutput, "+", '+');
@@ -551,10 +554,15 @@ struct Script : qi::grammar<Iterator, Skipper> {
 		pragmaEnd.name("@end");
 		pragmaEnd = pragmaPrefix >> l_end;
 		
+		/* @param[out] _r1 - output variable for invert filter flag */
 		inputFileFilter.name("input file filter");
-		inputFileFilter = nonEmptyValueString(true, false) | matchAnyRegexString;
+		inputFileFilter = eps[_r1 = false] >> (
+			 (invertFilter[_r1 = true] > nonEmptyValueString(true, false))
+			| nonEmptyValueString(true, false)
+			| matchAnyRegexString
+		)[_val = _1];
 		
-		/* @param[in] _r1 - output variable for process block
+		/* @param[out] _r1 - output variable for process block
 		 * @param[in] _r2 - enable syntactic temporaries */
 		destinationVariable.name("destination variable assignment");
 		destinationVariable = (
@@ -570,7 +578,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 			][_pass = phx::bind<bool>(&Script::setDestinationVariable, this, _r1, _a, _b, _c)]
 		);
 		
-		/* @param[in] _r1 - output variable for process block */
+		/* @param[out] _r1 - output variable for process block */
 		dependencyVariable.name("dependency variable assignment");
 		dependencyVariable = (
 			omit[
@@ -601,20 +609,21 @@ struct Script : qi::grammar<Iterator, Skipper> {
 		processBlock.name("foreach \"regex\" { ... } | all \"regex\" { ... } | none { ... }");
 		processBlock = (
 			(iter_pos[phx::bind(&Script::setLineInfo<ProcessBlock>, _val, _1)]
+			>> eps[phx::bind(&Script::setLocalVariables, this, _val)]
 			>> (l_foreach[_a = val(ProcessBlock::FOREACH)] | l_all[_a = val(ProcessBlock::ALL)] | l_none[_a = val(ProcessBlock::NONE)]))
 			>> (
 				  (eps(_a == val(ProcessBlock::NONE))[phx::bind(&pp::ProcessBlock::type, _val) = _a])
 				/* regular expression as input file filter */
-				| (eps > inputFileFilter[phx::bind(&Script::setProcessBlockInfo, _val, _a, _1)])
+				| (eps > inputFileFilter(_c)[phx::bind(&Script::setProcessBlockInfo, _val, _a, _1, _c)])
 			)
-			> beginGroup[phx::bind(&Script::enterScope, this)]
+			> beginGroup[(phx::bind(&Script::switchScope, this), phx::bind(&Script::enterScope, this))]
 			> *((!endGroup) >> (
 				  destinationVariable(_val, _a != val(ProcessBlock::NONE))
 				| dependencyVariable(_val)
 				| (eps(ref(this->script.config.nestedVariables)) >> variableAssignment(false, false))
 				| command[phx::bind(&pp::ProcessBlock::addCommand, _val, _1)]
 			))
-			> endGroup[phx::bind(&Script::leaveScope, this)]
+			> endGroup[(phx::bind(&Script::leaveScope, this), phx::bind(&Script::switchScope, this))]
 		);
 		
 		processPragmaInclude.name("@include <process-id>");
@@ -818,16 +827,18 @@ private:
 						pcf::exception::SymbolUnknown()
 						<< pcf::exception::tag::Message(boost::lexical_cast<std::string>(output.getLineInfo()) + ": Error: Trying to access unknown variable \"" + unknownVariable + "\".")
 					);
+					return false;
 				} else {
 					std::cerr << output.getLineInfo() << ": Warning: Trying to access unknown variable \"" + unknownVariable + "\"." << std::endl;
+					output.fold(true, this->script.vars.getDynamicVariables()); /* removes unresolved variable references */
 				}
-				return false;
 			}
 		}
 		if ( ! output.isSet() ) {
-			std::cerr << scriptPos << ": Failed to parse string literal: " << output.getVarString() << std::endl;
+			std::cerr << scriptPos << ": Error: Failed to parse string literal: " << output.getVarString() << std::endl;
+			return false;
 		}
-		return output.isSet();
+		return true;
 	}
 	
 	/**
@@ -1186,7 +1197,7 @@ private:
 	 * @param[in] var - output content of this variable
 	 */
 	void printVariable(const Verbosity verbosity, const Iterator & it, const std::string & var) {
-		if ( ! (this->script.config.verbosity < verbosity) ) {
+		if (verbosity <= this->script.config.verbosity) {
 			const boost::spirit::classic::file_position_base<std::string> & pos = it.get_position();
 			const pp::LineInfo scriptPos(pos.file, static_cast<size_t>(pos.line), static_cast<size_t>(pos.column));
 			const boost::optional<pp::StringLiteral &> varVal = this->script.vars.get(var);
@@ -1230,7 +1241,7 @@ private:
 	 * @param[in] literal - output this string literal
 	 */
 	void printStringLiteral(const Verbosity verbosity, const Iterator & it, const pp::StringLiteral & literal) {
-		if ( ! (this->script.config.verbosity < verbosity) ) {
+		if (verbosity <= this->script.config.verbosity) {
 			const boost::spirit::classic::file_position_base<std::string> & pos = it.get_position();
 			const pp::LineInfo scriptPos(pos.file, static_cast<size_t>(pos.line), static_cast<size_t>(pos.column));
 			std::string verbosityStr = boost::locale::to_lower(boost::lexical_cast<std::string>(verbosity));
@@ -1261,7 +1272,7 @@ private:
 	 * @param[in] it - extract script location from this iterator
 	 */
 	void printAllVariables(const Verbosity verbosity, const Iterator & it) {
-		if ( ! (this->script.config.verbosity < verbosity) ) {
+		if (verbosity <= this->script.config.verbosity) {
 			const boost::spirit::classic::file_position_base<std::string> & pos = it.get_position();
 			const pp::LineInfo scriptPos(pos.file, static_cast<size_t>(pos.line), static_cast<size_t>(pos.column));
 			const pp::VariableScopes & varScopes(this->script.vars.getScopes());
@@ -1306,7 +1317,14 @@ private:
 	bool readImport(const pp::StringLiteral & p) {
 		if (p.isSet() == false || p.isVariable()) return false;
 		boost::filesystem::path path(p.getString(), pcf::path::utf8);
-		return this->script.readImport(path, this->sourcePath);
+		try {
+			return this->script.readImport(path, this->sourcePath);
+		} catch (const pcf::exception::FileNotFound & e) {
+			addLineInfoToException(p.getLineInfo(), e);
+		} catch (const pcf::exception::Input & e) {
+			addLineInfoToException(p.getLineInfo(), e);
+		}
+		return false;
 	}
 	
 	/**
@@ -1318,7 +1336,14 @@ private:
 	bool readInclude(const pp::StringLiteral & p) {
 		if (p.isSet() == false || p.isVariable()) return false;
 		boost::filesystem::path path(p.getString(), pcf::path::utf8);
-		return this->script.readInclude(path, this->sourcePath);
+		try {
+			return this->script.readInclude(path, this->sourcePath);
+		} catch (const pcf::exception::FileNotFound & e) {
+			addLineInfoToException(p.getLineInfo(), e);
+		} catch (const pcf::exception::Input & e) {
+			addLineInfoToException(p.getLineInfo(), e);
+		}
+		return false;
 	}
 	
 	/**
@@ -1462,13 +1487,23 @@ private:
 	}
 	
 	/**
+	 * Adds the global variables to local process block scope.
+	 * 
+	 * @param[out] pb - add global variables to this process block scope
+	 */
+	void setLocalVariables(ProcessBlock & pb) {
+		pb.globalVars = this->script.vars;
+	}
+	
+	/**
 	 * Sets the process block type and input file filter from the given values.
 	 *
 	 * @param[in,out] pb - update this process block
 	 * @param[in] t - process block type
 	 * @param[in] f - input file filter to use
+	 * @param[in] i - set true to invert the meaning of the input file filter
 	 */
-	static void setProcessBlockInfo(ProcessBlock & pb, const ProcessBlock::Type t, const pp::StringLiteral & f) {
+	static void setProcessBlockInfo(ProcessBlock & pb, const ProcessBlock::Type t, const pp::StringLiteral & f, const bool i) {
 		if (f.isVariable() || f.isSet() == false) {
 			BOOST_THROW_EXCEPTION(
 				pcf::exception::SyntaxError()
@@ -1483,7 +1518,7 @@ private:
 			throwRegexException(f, e);
 		}
 		pb.type = t;
-		pb.setFilter(filterW);
+		pb.setFilter(filterW, i);
 	}
 	
 	/**
@@ -1498,6 +1533,13 @@ private:
 	 */
 	void leaveScope() {
 		this->script.vars.removeScope();
+	}
+	
+	/**
+	 * Switches between global and local variable scope.
+	 */
+	void switchScope() {
+		std::swap(this->script.vars, this->script.localVars);
 	}
 	
 	/**
@@ -1764,7 +1806,7 @@ private:
 	 */
 	static ProcessNode getDepProcessNode(ProcessNode & root, const ProcessNode & node) {
 		ProcessNode newRoot = node;
-		if (newRoot.parallel.empty() && ( ! root.value )) {
+		if (newRoot.parallel.empty() && newRoot.dependency.empty() && ( ! root.value )) {
 			newRoot.parallel = root.parallel;
 			newRoot.dependency = root.dependency;
 		} else {

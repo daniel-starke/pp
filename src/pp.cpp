@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-24
- * @version 2016-11-19
+ * @version 2016-12-23
  */
 #include <cstdlib>
 #include <iostream>
@@ -40,6 +40,7 @@
 #include <pcf/os/Target.hpp>
 #include <pcf/string/Escape.hpp>
 #include "pp/Script.hpp"
+#include "pp/Utility.hpp"
 #include "license.hpp"
 #include "posix_main.hpp"
 #include "pp.hpp"
@@ -79,7 +80,7 @@ int posix_main(int argc, POSIX_ARG_TYPE ** argv, POSIX_ARG_TYPE ** enpv) {
 		po::options_description desc("pp");
 		po::positional_options_description descRemain;
 		bool build;
-		size_t jobs;
+		JobsArg jobs;
 		bool printOnly;
 		string verbosity;
 		fs::path changeDir;
@@ -107,7 +108,7 @@ int posix_main(int argc, POSIX_ARG_TYPE ** argv, POSIX_ARG_TYPE ** enpv) {
 			("change-directory,C", po::_U(value)<fs::path>(&changeDir), "")
 			("file,f", po::_U(value)<fs::path>(&scriptFile)->default_value("process.parallel"), "")
 			("help,h", "")
-			("jobs,j", po::value<size_t>(&jobs)->default_value(boost::thread::hardware_concurrency()), "")
+			("jobs,j", po::value<JobsArg>(&jobs)->default_value(JobsArg(boost::thread::hardware_concurrency())), "")
 			("license", "")
 			("print-only,n", po::value<bool>(&printOnly)->default_value(false)->implicit_value(true)->zero_tokens(), "")
 			("positional-parameter", po::_U(value)< vector<_U(string)> >()->multitoken()->zero_tokens(), "")
@@ -203,6 +204,7 @@ int posix_main(int argc, POSIX_ARG_TYPE ** argv, POSIX_ARG_TYPE ** enpv) {
 		config.printOnly = printOnly;
 		config.environmentVariables = true;
 		config.variableChecking = true;
+		config.commandChecking = true;
 		config.nestedVariables = true;
 		config.fullRecursiveMatch = false;
 		config.removeTemporaries = true;
@@ -283,7 +285,11 @@ int posix_main(int argc, POSIX_ARG_TYPE ** argv, POSIX_ARG_TYPE ** enpv) {
 		return EXIT_FAILURE;
 	} catch (const pcf::exception::Api & e) {
 		if (const string * errMsg = boost::get_error_info<pcf::exception::tag::Message>(e)) {
-			cerr << "Error: " << *errMsg << endl;
+			if ( boost::get_error_info<pp::LineInfoMarker>(e) ) {
+				cerr << *errMsg << endl;
+			} else {
+				cerr << "Error: " << *errMsg << endl;
+			}
 		} else {
 			cerr << boost::diagnostic_information(e);
 		}
@@ -345,14 +351,15 @@ void printHelp() {
 	" -h, --help\n"
 	"  Prints out this description.\n"
 	" -j, --jobs <number>\n"
-	"  Execute with the given number of threads.\n"
-	"  The default is the number of virtual cores.\n"
+	"  Execute with the given number of threads. It is possible to define this value\n"
+	"  in percent of available cores. The default is the number of virtual cores.\n"
 	" --license\n"
 	"  Displays the licenses for this program.\n"
 	" -n, --print-only\n"
 	"  Only prints the commands that would had been executed.\n"
 	" -v, --verbosity <enumeration>\n"
-	"  Sets the verbosity level. Default is WARN.\n"
+	"  Sets the verbosity level. Default is WARN. Setting this overwrites all\n"
+	"  verbosity settings in the script making this the only verbosity level.\n"
 	"  Possible values are ERROR, WARN, INFO and DEBUG.\n"
 	"\n"
 	"target\n"

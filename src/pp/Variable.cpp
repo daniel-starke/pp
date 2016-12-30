@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-27
- * @version 2016-11-23
+ * @version 2016-12-19
  */
 #include <algorithm>
 #include <fstream>
@@ -209,7 +209,7 @@ bool StringLiteral::replaceVariables(StringLiteralList & parts, std::string & un
 			} else if ( (var = varHandler.get(part.value)) ) {
 				/* replace variable */
 				StringLiteral varLit(*var);
-				result = result && varLit.replaceVariables(unknownVariable, varHandler, dynVars);
+				result = varLit.replaceVariables(unknownVariable, varHandler, dynVars) && result;
 				part.type = StringLiteralPart::SUB;
 				part.sub.clear();
 				BOOST_FOREACH(StringLiteralCapturePair & capture, varLit.literal) {
@@ -221,7 +221,7 @@ bool StringLiteral::replaceVariables(StringLiteralList & parts, std::string & un
 			}
 			break;
 		case StringLiteralPart::SUB:
-			result = result && StringLiteral::replaceVariables(part.sub, unknownVariable, varHandler, dynVars);
+			result = StringLiteral::replaceVariables(part.sub, unknownVariable, varHandler, dynVars) && result;
 			break;
 		}
 	}
@@ -271,8 +271,32 @@ bool StringLiteral::replaceVariables(const VariableMap & vars, const DynamicVari
  */
 bool StringLiteral::replaceVariables(std::string & unknownVariable, const VariableHandler & varHandler, const DynamicVariableSet & dynVars) {
 	bool result = true;
+	/* perfect forward for simple assignments (this ensures that captures are correctly passed through) */
+	if (this->literal.size() == 1 && this->literal.front().second.size() == 1) {
+		StringLiteralPart & part(this->literal.front().second.front());
+		if (part.type == StringLiteralPart::VARIABLE) {
+			if ( part.functions.empty() ) {
+				boost::optional<const StringLiteral &> var;
+				if (dynVars.find(part.value) != dynVars.end()) {
+					return true;
+				} else if ( (var = varHandler.get(part.value)) ) {
+					if ( var ) {
+						/* replace whole variable (retain line info) */
+						const LineInfo li(this->lineInfo);
+						this->operator= (*var);
+						this->lineInfo = li;
+						return true;
+					}
+				}
+				unknownVariable = part.value;
+				return false;
+			}
+		} else {
+			return true;
+		}
+	}
 	BOOST_FOREACH(StringLiteralCapturePair & capture, this->literal) {
-		result = result && StringLiteral::replaceVariables(capture.second, unknownVariable, varHandler, dynVars);
+		result = StringLiteral::replaceVariables(capture.second, unknownVariable, varHandler, dynVars) && result;
 	}
 	/* reduce number of string literal parts by combining string parts and resolve variable functions */
 	this->fold();
@@ -325,10 +349,13 @@ bool StringLiteral::replaceVariables(const VariableHandler & varHandler) {
 
 /**
  * Folds this string literal internally to make comparison possible (normalized AST) and to save memory.
+ * 
+ * @param[in] final - set to remove all variable references
+ * @param[in] dynVars - do not remove these variables
  */
-void StringLiteral::fold() {
+void StringLiteral::fold(const bool final, const DynamicVariableSet & dynVars) {
 	BOOST_FOREACH(StringLiteralCapturePair & capture, this->literal) {
-		StringLiteral::fold(capture.second);
+		StringLiteral::fold(capture.second, final, dynVars);
 	}
 }
 
@@ -337,9 +364,11 @@ void StringLiteral::fold() {
  * Folds this string literal internally to make comparison possible and to save memory.
  * 
  * @param[in] segment - string literal part list
+ * @param[in] final - set to remove all variable references
+ * @param[in] dynVars - do not remove these variables
  * @return true if the folded segment is complete (safe to apply functions), false if still variable
  */
-bool StringLiteral::fold(StringLiteralList & segment) {
+bool StringLiteral::fold(StringLiteralList & segment, const bool final, const DynamicVariableSet & dynVars) {
 	StringLiteralList::iterator part, endPart;
 	boost::optional<StringLiteralList::iterator> lastPart;
 	bool result = true;
@@ -355,20 +384,25 @@ bool StringLiteral::fold(StringLiteralList & segment) {
 			}
 			break;
 		case StringLiteralPart::VARIABLE:
-			result = false;
-			lastPart.reset();
+			if (final && dynVars.find(part->value) == dynVars.end()) {
+				part = segment.erase(part);
+				continue;
+			} else {
+				result = false;
+				lastPart.reset();
+			}
 			break;
 		case StringLiteralPart::SUB:
-			if ( StringLiteral::fold(part->sub) ) {
-				/* sub segment is complete (should consists of only a single string now) */
-				if (part->sub.size() != 1) {
+			if ( StringLiteral::fold(part->sub, final, dynVars) ) {
+				/* sub segment is complete (should consists of at most a single string) */
+				if (part->sub.size() > 1) {
 					BOOST_THROW_EXCEPTION(
 						pcf::exception::InvalidValue()
 						<< pcf::exception::tag::Message("Broken string literal segment.")
 					);
 					return false;
 				}
-				std::string value(part->sub.front().value);
+				std::string value(part->sub.empty() ? std::string() : part->sub.front().value);
 				BOOST_FOREACH(const StringLiteralFunctionPair & function, part->functions) {
 					if ( function.second ) function.second(value);
 				}
@@ -428,7 +462,7 @@ void StringLiteral::setLiteralFromString(const std::string & str, const StringLi
 		this->literal = attribute;
 		this->set = true;
 		this->regexCaptures.clear();
-	}	
+	}
 }
 
 

@@ -3,9 +3,11 @@
  * @author Daniel Starke
  * @copyright Copyright 2013-2016 Daniel Starke
  * @date 2013-11-23
- * @version 2016-05-01
+ * @version 2016-12-28
  */
 #include <algorithm>
+#include <cstdlib>
+#include <limits>
 #include <string>
 #include <vector>
 #include <boost/algorithm/string.hpp>
@@ -564,11 +566,12 @@ boost::filesystem::path getExecutablePath(boost::system::error_code & errorCode)
  * @param[in] p - path matching expression
  * @param[in] matchAll - set to true to check against all files recursively, false to match only path elements
  * @param[in] hasPattern - callback function to check if a path element contains a pattern
+ * @param[in] unescapePattern - callback function to unescape a path element which contains a pattern (but only for literals)
  * @param[in] matchesPattern - callback function to check if a path element matches a pattern
  * @return true on success, else false
  * @see CheckPatternCallback and MatchingCallback for callback definitions
  */
-bool getMatchingPathList(std::vector<boost::filesystem::path> & r, const boost::filesystem::path & p, const bool matchAll, const CheckPatternCallback & hasPattern, const MatchingCallback & matchesPattern) {
+bool getMatchingPathList(std::vector<boost::filesystem::path> & r, const boost::filesystem::path & p, const bool matchAll, const CheckPatternCallback & hasPattern, const UnescapePatternCallback & unescapePattern, const MatchingCallback & matchesPattern) {
 	boost::filesystem::path realPath, basePath;
 	boost::system::error_code ec;
 	boost::filesystem::path::const_iterator next, i = p.begin();
@@ -581,8 +584,8 @@ bool getMatchingPathList(std::vector<boost::filesystem::path> & r, const boost::
 			/* end of non-pattern path elements */
 			break;
 		} else {
-			if (boost::filesystem::exists(realPath / (*i), ec) && ( ! ec )) {
-				realPath /= (*i);
+			if (boost::filesystem::exists(realPath / unescapePattern(i->wstring(utf8)), ec) && ( ! ec )) {
+				realPath /= unescapePattern(i->wstring(utf8));
 			} else {
 				/* end of non-pattern and non-real path elements */
 				break;
@@ -596,7 +599,7 @@ bool getMatchingPathList(std::vector<boost::filesystem::path> & r, const boost::
 			/* end of non-pattern path elements */
 			break;
 		} else {
-			basePath /= (*i);
+			basePath /= unescapePattern(i->wstring(utf8));
 		}
 	}
 	/* passed path does not exists */
@@ -615,28 +618,42 @@ bool getMatchingPathList(std::vector<boost::filesystem::path> & r, const boost::
 			bool result = true;
 			if ( matchAll ) {
 				/* match whole part from here */
-				if ( basePath.empty() ) basePath = boost::filesystem::current_path();
+				const bool removeBasePath = basePath.empty();
+				if ( removeBasePath ) basePath = boost::filesystem::current_path();
 				for (boost::filesystem::recursive_directory_iterator n(basePath), endN; n != endN; ++n) {
 					const std::wstring element(n->path().filename().wstring(utf8));
 					const std::wstring relativePart(removeBase(basePath, n->path()).generic_wstring(utf8));
 					const std::wstring relativePattern(buildPathFromIterator(i, end).generic_wstring(utf8));
 					if (element == L"." || element == L"..") continue;
 					if ( matchesPattern(relativePart, relativePattern) ) {
-						r.push_back(realPath / relativePart);
+						if ( removeBasePath ) {
+							r.push_back(relativePart);
+						} else {
+							r.push_back(realPath / relativePart);
+						}
 					}
 				}
 				break;
 			} else {
 				/* match element-wise from here */
-				if ( basePath.empty() ) basePath = boost::filesystem::current_path();
+				const bool removeBasePath = basePath.empty();
+				if ( removeBasePath ) basePath = boost::filesystem::current_path();
 				for (boost::filesystem::directory_iterator n(basePath), endN; n != endN; ++n) { 
 					const std::wstring element(n->path().filename().wstring(utf8));
 					if (element == L"." || element == L"..") continue;
 					if ( matchesPattern(element, pattern) ) {
 						if (next == end) {
-							r.push_back(n->path());
+							if ( removeBasePath ) {
+								r.push_back(removeBase(basePath, n->path()));
+							} else {
+								r.push_back(n->path());
+							}
 						} else if ( ! boost::filesystem::is_regular_file(n->status()) ) {
-							result = result && getMatchingPathList(r, buildPathFromIterator(n->path(), next, end), false, hasPattern, matchesPattern);
+							if ( removeBasePath ) {
+								result = result && getMatchingPathList(r, buildPathFromIterator(removeBase(basePath, n->path()), next, end), false, hasPattern, unescapePattern, matchesPattern);
+							} else {
+								result = result && getMatchingPathList(r, buildPathFromIterator(n->path(), next, end), false, hasPattern, unescapePattern, matchesPattern);
+							}
 						}
 					}
 				}
@@ -645,7 +662,7 @@ bool getMatchingPathList(std::vector<boost::filesystem::path> & r, const boost::
 			break;
 		} else {
 			/* just copy path element */
-			basePath /= (*i);
+			basePath /= unescapePattern(i->wstring(utf8));
 			if (next == end) {
 				/* last element */
 				if (boost::filesystem::exists(basePath, ec) && ( ! ec )) {
@@ -677,6 +694,13 @@ bool getWildcardPathList(std::vector<boost::filesystem::path> & r, const std::ws
 		}
 	};
 	
+	/* callback function to unescape a path element */
+	struct UnescapeCallbackNamespace {
+		static std::wstring unescapeWildcardPattern(const std::wstring & str) {
+			return str;
+		}
+	};
+	
 	/* callback function to check whether the given path element matches the pattern or not */
 	struct MatchingCallbackNamespace {
 		static bool matchesWildcardPattern(const std::wstring & str, const std::wstring & pattern) {
@@ -693,6 +717,7 @@ bool getWildcardPathList(std::vector<boost::filesystem::path> & r, const std::ws
 		boost::filesystem::path(p, utf8),
 		matchAll,
 		CheckPatternCallbackNamespace::isWildcardPattern,
+		UnescapeCallbackNamespace::unescapeWildcardPattern,
 		MatchingCallbackNamespace::matchesWildcardPattern
 	);
 }
@@ -714,7 +739,119 @@ bool getRegexPathList(std::vector<boost::filesystem::path> & r, const std::wstri
 	/* callback function to decide whether a path element contains a pattern or not */
 	struct CheckPatternCallbackNamespace {
 		static bool isRegexPattern(const std::wstring & str) {
-			return (str.find_first_of(L".[{}()*+?|^$\x241B\x241F") != std::wstring::npos);
+			size_t pos = 0;
+			while (pos != std::wstring::npos) {
+				pos = str.find_first_of(L".[{()*+?|^$", pos);
+				if (pos != std::wstring::npos) {
+					if (pos > 0 && str[pos - 1] != 0x241B) {
+						if (pos > 1 && (str[pos - 2] != 0x241B || str[pos] != L'{' || (str[pos - 1] != L'x' && str[pos - 1] != L'N'))) {
+							return true;
+						} else if (pos <= 1) {
+							return true;
+						}
+					}
+					pos++;
+				}
+			}
+			return false;
+		}
+	};
+	
+	/* callback function to unescape a path element */
+	struct UnescapeCallbackNamespace {
+		static std::wstring unescapeRegexPattern(const std::wstring & str) {
+			const boost::regex_traits_wrapper<boost::wregex::traits_type> traits;
+			std::wstring result;
+			std::wstring::value_type lastChar(0);
+			result.reserve(str.size());
+			std::wstring::const_pointer start(&(str[0])), end(&(str[str.size()]));
+			for (; start != end; start++) {
+				const std::wstring::value_type c = *start;
+				if (lastChar == 0x241B) {
+					switch (c) {
+					case L'a': result.push_back(L'\a'); break;
+					case L'e': result.push_back(0x001E); break;
+					case L'f': result.push_back(L'\f'); break;
+					case L'n': result.push_back(L'\n'); break;
+					case L'r': result.push_back(L'\r'); break;
+					case L't': result.push_back(L'\t'); break;
+					case L'v': result.push_back(L'\v'); break;
+					case L'c': result.push_back(c % 32); break;
+					case L'x':
+						{
+							if (++start == end) goto onerror;
+							if (*start == L'{') {
+								if (++start == end) goto onerror;
+								const int i = traits.toi(start, end, 16);
+								if (start == end
+									|| i < 0
+									|| (std::numeric_limits<std::wstring::value_type>::is_specialized && i > static_cast<int>(std::numeric_limits<std::wstring::value_type>::max()))
+									|| *start != L'}') {
+									goto onerror;
+								}
+								result.push_back(static_cast<std::wstring::value_type>(i));
+							} else {
+								const std::ptrdiff_t len = std::min(static_cast<std::ptrdiff_t>(2), static_cast<std::ptrdiff_t>(end - start));
+								const int i = traits.toi(start, start + len, 16);
+								if (i < 0 || (std::numeric_limits<std::wstring::value_type>::is_specialized && i > static_cast<int>(std::numeric_limits<std::wstring::value_type>::max()))) {
+									goto onerror;
+								}
+								start--;
+								result.push_back(static_cast<std::wstring::value_type>(i));
+							}
+						}
+						break;
+					case L'0':
+						{
+							/* octal escape sequence */
+							if (++start == end) goto onerror;
+							const std::ptrdiff_t len = std::min(static_cast<std::ptrdiff_t>(3), static_cast<std::ptrdiff_t>(end - start));
+							const int i = traits.toi(start, start + len, 8);
+							if (i < 0 || (std::numeric_limits<std::wstring::value_type>::is_specialized && i > static_cast<int>(std::numeric_limits<std::wstring::value_type>::max()))) {
+								goto onerror;
+							}
+							start--;
+							result.push_back(static_cast<std::wstring::value_type>(i));
+						}
+						break;
+					case L'N':
+						{
+							/* \N{name} named escape sequence */
+							if (++start == end) goto onerror;
+							if (*start != L'{') goto onerror;
+							if (++start == end) goto onerror;
+							const std::wstring::const_pointer newStart(std::find(start, end, L'}'));
+							if (newStart == end) goto onerror;
+							/* use boost's internal lookup table */
+							const std::wstring res = traits.lookup_collatename(start, newStart);
+							if ( res.empty() ) goto onerror;
+							start = newStart;
+							result.append(res);
+						}
+						break;
+					case 0x241B: result.push_back(L'\\'); break;
+					default: result.push_back(c); break;
+					}
+					lastChar = 0;
+				} else if (c != 0x241B) {
+					if (c == 0x241F) {
+						result.push_back(L':');
+					} else {
+						result.push_back(c);
+					}
+					lastChar = c;
+				} else {
+					lastChar = c;
+				}
+				if (start == end) break;
+			}
+			return result;
+			onerror:
+			BOOST_THROW_EXCEPTION(
+				pcf::exception::SyntaxError()
+				<< pcf::exception::tag::Message("Invalid escape code in regular expression: " + boost::locale::conv::utf_to_utf<char>(str))
+			);
+			return std::wstring();
 		}
 	};
 	
@@ -783,6 +920,7 @@ bool getRegexPathList(std::vector<boost::filesystem::path> & r, const std::wstri
 		boost::filesystem::path(escapedPattern, utf8),
 		matchAll,
 		CheckPatternCallbackNamespace::isRegexPattern,
+		UnescapeCallbackNamespace::unescapeRegexPattern,
 		MatchingCallbackNamespace::matchesRegexPattern
 	);
 }

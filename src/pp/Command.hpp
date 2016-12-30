@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-11-23
+ * @version 2016-12-30
  */
 #ifndef __PP_COMMAND_HPP__
 #define __PP_COMMAND_HPP__
@@ -259,7 +259,7 @@ public:
 	void printResults(std::ostream & out, bool & wroteOutput, const int reasonFlags) const {
 		if ( this->startDt.is_not_a_date_time() ) {
 			/* command was not executed */
-			out << "\nCommand was not executed: " << this->getFinalCommandString().getString() << '\n';
+			out << "\nError: Command was not executed: " << this->getFinalCommandString().getString() << '\n';
 			wroteOutput = true;
 			return;
 		}
@@ -313,7 +313,7 @@ public:
 		std::string unknownVariable;
 		this->reset();
 		boost::mutex::scoped_lock lock(this->mutex);
-		if ( ! this->command.replaceVariables(unknownVariable, vars) ) {
+		if ( ! this->command.replaceVariables(unknownVariable, vars, DynamicVariableSet()) ) {
 			if ( config.variableChecking ) {
 				BOOST_THROW_EXCEPTION(
 					pcf::exception::SymbolUnknown()
@@ -322,7 +322,7 @@ public:
 				return false;
 			} else {
 				if (config.verbosity >= VERBOSITY_WARN) {
-					std::cerr << this->command.getLineInfo() << " Warning: Trying to access unknown variable \"" << unknownVariable << "\"." << std::endl;
+					std::cerr << this->command.getLineInfo() << ": Warning: Trying to access unknown variable \"" << unknownVariable << "\"." << std::endl;
 				}
 			}
 		}
@@ -353,24 +353,33 @@ public:
 		const std::string shellPath(this->shell->path.string(pcf::path::utf8));
 		const std::string cmd(this->getFinalCommandString().getString());
 #endif /* Windows */
+		try {
 #ifdef PCF_IS_WIN
-		if ( this->shell->raw ) {
-			proc = boost::optional<pcf::process::ProcessPipe>(pcf::process::ProcessPipeFactory(
-				shellPath,
-				cmd,
-				pcf::process::ProcessPipeFactory::Type::Raw
-			).run());
-		} else
+			if ( this->shell->raw ) {
+				proc = boost::optional<pcf::process::ProcessPipe>(pcf::process::ProcessPipeFactory(
+					shellPath,
+					cmd,
+					pcf::process::ProcessPipeFactory::Type::Raw
+				).run());
+			} else
 #endif /* Windows */
-		{
-			proc = boost::optional<pcf::process::ProcessPipe>(pcf::process::ProcessPipeFactory(
-				shellPath,
-				cmd,
-				pcf::process::ProcessPipeFactory::Type::Shell
-			).run());
+			{
+				proc = boost::optional<pcf::process::ProcessPipe>(pcf::process::ProcessPipeFactory(
+					shellPath,
+					cmd,
+					pcf::process::ProcessPipeFactory::Type::Shell
+				).run());
+			}
+		} catch (const pcf::exception::Api & e) {
+			if (const std::string * errMsg = boost::get_error_info<pcf::exception::tag::Message>(e)) {
+				sout << this->command.getLineInfo() << ": Error: " << *errMsg << std::endl;
+			} else {
+				sout << this->command.getLineInfo() << ": " << boost::diagnostic_information(e);
+			}
 		}
 		if ( ( ! proc ) || ( ! (*proc) ) ) {
 			this->endDt = this->startDt;
+			this->output = sout.str();
 			this->exitCode = -1;
 			this->state = FAILED;
 			return false;

@@ -3,11 +3,12 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-11-18
+ * @version 2016-12-29
  */
 #include <fstream>
 #include <sstream>
 #include <boost/config/warning_disable.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/phoenix/bind.hpp>
 #include <boost/phoenix/core.hpp>
 #include "Execution.hpp"
@@ -102,6 +103,39 @@ public:
 };
 
 
+/**
+ * Functor to output runtime statistics.
+ */
+class RuntimeCheck {
+private:
+	const boost::posix_time::ptime start;
+	const Verbosity verbosity;
+	const std::string message;
+public:
+	/**
+	 * Constructor.
+	 * 
+	 * @param[in] currentVerbosity - current verbosity level
+	 * @param[in] msg - output message
+	 */
+	RuntimeCheck(const Verbosity currentVerbosity, const std::string & msg):
+		start(boost::posix_time::microsec_clock::universal_time()),
+		verbosity(currentVerbosity),
+		message(msg)
+	{}
+	
+	/**
+	 * Destructor.
+	 */
+	~RuntimeCheck() {
+		if (this->verbosity >= VERBOSITY_DEBUG) {
+			const boost::posix_time::time_duration duration = boost::posix_time::microsec_clock::universal_time() - this->start;
+			std::cerr << "pp: " << this->message << " in " << duration.total_seconds() << " seconds" << std::endl;
+		}
+	}
+};
+
+
 } /* namespace */
 
 
@@ -119,54 +153,80 @@ bool Execution::prepare(const ProgressCallback & callProgress) {
 	this->flatDependentMap.clear();
 	this->temporaryFileInfoMap.clear();
 	
+	/* print process tree */
+	if (this->config.verbosity >= pp::VERBOSITY_DEBUG) {
+		std::cerr << "pp: execution chains for target: " << this->id << std::endl;
+		BOOST_FOREACH(ProcessNode & node, this->processes) {
+			node.traverseTopDown(boost::phoenix::bind<bool>(&Execution::printProcessTree, _1, _2));
+		}
+	}
+	
 	/* reset process nodes */
-	BOOST_FOREACH(ProcessNode & node, this->processes) {
-		node.traverseTopDown(boost::phoenix::bind<bool>(&Execution::resetProcessNode, _1, _2));
+	{
+		const RuntimeCheck count(this->config.verbosity, "reset process node");
+		BOOST_FOREACH(ProcessNode & node, this->processes) {
+			node.traverseTopDown(boost::phoenix::bind<bool>(&Execution::resetProcessNode, _1, _2));
+		}
 	}
 	/* resolve dependencies */
-	BOOST_FOREACH(ProcessNode & node, this->processes) {
-		node.traverseDependencies(
-			boost::phoenix::bind<bool>(&Execution::solveDependencies, _1, _2),
-			output
-		);
+	{
+		const RuntimeCheck count(this->config.verbosity, "resolved dependencies");
+		BOOST_FOREACH(ProcessNode & node, this->processes) {
+			node.traverseDependencies(
+				boost::phoenix::bind<bool>(&Execution::solveDependencies, _1, _2),
+				output
+			);
+		}
 	}
 	/* create flat dependent map */
-	BOOST_FOREACH(ProcessNode & node, this->processes) {
-		node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::createFlatDependentMap, this, _1, _2));
+	{
+		const RuntimeCheck count(this->config.verbosity, "created flat dependent map");
+		BOOST_FOREACH(ProcessNode & node, this->processes) {
+			node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::createFlatDependentMap, this, _1, _2));
+		}
 	}
 	/* check for duplicates in outputs and abort with an error in such case */
-	BOOST_FOREACH(ProcessNode & node, this->processes) {
-		node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::checkDuplicates, _1, _2, boost::phoenix::ref(duplicates)));
-		if ( ! duplicates.empty() ) {
-			std::cerr << "Error: Same destination path for different inputs. Destination paths (reduced list):" << std::endl;
-			const std::set<boost::shared_ptr<PathLiteral>, LessPathLiteralPtrValueLocation> dups(duplicates.begin(), duplicates.end());
-			BOOST_FOREACH(const boost::shared_ptr<PathLiteral> & p, dups) {
-				std::cerr << p->getLineInfo() << ": " << p->getString() << std::endl;
+	{
+		const RuntimeCheck count(this->config.verbosity, "checked for duplicates in outputs");
+		BOOST_FOREACH(ProcessNode & node, this->processes) {
+			node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::checkDuplicates, _1, _2, boost::phoenix::ref(duplicates)));
+			if ( ! duplicates.empty() ) {
+				std::cerr << "Error: Same destination path for different inputs. Destination paths (reduced list):" << std::endl;
+				const std::set<boost::shared_ptr<PathLiteral>, LessPathLiteralPtrValueLocation> dups(duplicates.begin(), duplicates.end());
+				BOOST_FOREACH(const boost::shared_ptr<PathLiteral> & p, dups) {
+					std::cerr << p->getLineInfo() << ": " << p->getString() << std::endl;
+				}
+				return false;
 			}
-			return false;
 		}
 	}
 	/* create helper map to decide which temporaries need to be created and which not */
-	BOOST_FOREACH(ProcessNode & node, this->processes) {
-		/* remark: overlapping between different process nodes cannot happen due to the reference via pointer within the map keys */
-		node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::createTemporaryInputFileInfoMap, this, _1, _2));
-	}
-	if ( ! this->temporaryFileInfoMap.empty() ) {
+	{
+		const RuntimeCheck count(this->config.verbosity, "updated creation flag for temporary transitions");
 		BOOST_FOREACH(ProcessNode & node, this->processes) {
-			node.traverseTopDown(boost::phoenix::bind<bool>(&Execution::createTemporaryOutputFileInfoMap, this, _1, _2));
+			/* remark: overlapping between different process nodes cannot happen due to the reference via pointer within the map keys */
+			node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::createTemporaryInputFileInfoMap, this, _1, _2));
 		}
-		/* update temporary creation flag based on just created helper map */
-		updateTemporaryCreationFlags(this->temporaryFileInfoMap, this->config.verbosity);
-		/* propagate PathLiteral::FORCED flag (set due to temporary creation check) */
-		BOOST_FOREACH(ProcessNode & node, this->processes) {
-			node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::propagateForcedFlag, this, _1, _2));
+		if ( ! this->temporaryFileInfoMap.empty() ) {
+			BOOST_FOREACH(ProcessNode & node, this->processes) {
+				node.traverseTopDown(boost::phoenix::bind<bool>(&Execution::createTemporaryOutputFileInfoMap, this, _1, _2));
+			}
+			/* update temporary creation flag based on just created helper map */
+			updateTemporaryCreationFlags(this->temporaryFileInfoMap, this->config.verbosity);
+			/* propagate PathLiteral::FORCED flag (set due to temporary creation check) */
+			BOOST_FOREACH(ProcessNode & node, this->processes) {
+				node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::propagateForcedFlag, this, _1, _2));
+			}
 		}
 	}
 	/* prepare */
-	if ( ! this->config.printOnly ) {
-		/* count commands that need to be executed */
-		BOOST_FOREACH(ProcessNode & node, this->processes) {
-			node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::countCommands, _1, _2, callProgress));
+	{
+		const RuntimeCheck count(this->config.verbosity, "counted needed command executions");
+		if ( ! this->config.printOnly ) {
+			/* count commands that need to be executed */
+			BOOST_FOREACH(ProcessNode & node, this->processes) {
+				node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::countCommands, _1, _2, callProgress));
+			}
 		}
 	}
 	return true;
@@ -185,6 +245,7 @@ bool Execution::prepare(const ProgressCallback & callProgress) {
  */
 bool Execution::execute(boost::asio::io_service & ioService, const ProgressCallback & callProgress, const ExecutionCallback & callFinally) {
 	using namespace boost::phoenix::placeholders;
+	const RuntimeCheck count(this->config.verbosity, "queued commands for execution");
 	
 	/* execute */
 	if ( this->config.printOnly ) {
@@ -219,15 +280,22 @@ bool Execution::complete(bool & isFirst) {
 	
 	if ( ! this->config.printOnly ) {
 		/* print results (needs to be done first so that output file check can handle temporary files, too) */
-		BOOST_FOREACH(ProcessNode & node, this->processes) {
-			node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::logCallback, this, _1, _2, boost::phoenix::ref(isFirst)));
+		{
+			const RuntimeCheck count(this->config.verbosity, "printed results");
+			BOOST_FOREACH(ProcessNode & node, this->processes) {
+				node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::logCallback, this, _1, _2, boost::phoenix::ref(isFirst)));
+			}
 		}
 		/* update flat dependent map for successfully completed commands */
-		BOOST_FOREACH(ProcessNode & node, this->processes) {
-			node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::updateFlatDependentMap, this, _1, _2));
+		{
+			const RuntimeCheck count(this->config.verbosity, "updated flat dependent map for successfully completed commands");
+			BOOST_FOREACH(ProcessNode & node, this->processes) {
+				node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::updateFlatDependentMap, this, _1, _2));
+			}
 		}
 		/* delete temporaries if all direct dependents completed successfully */
 		if ( this->config.removeTemporaries ) {
+			const RuntimeCheck count(this->config.verbosity, "deleted temporaries");
 			std::ostringstream sout;
 			BOOST_FOREACH(const PathLiteralPtrDependentMap::value_type & flatDependent, this->flatDependentMap) {
 				if (flatDependent.first->hasFlags(PathLiteral::TEMPORARY) && flatDependent.second.empty()) {
@@ -252,6 +320,7 @@ bool Execution::complete(bool & isFirst) {
 		}
 		/* delete target files with incomplete transition */
 		if ( this->config.cleanUpIncompletes ) {
+			const RuntimeCheck count(this->config.verbosity, "deleted target files with incomplete transition");
 			std::ostringstream sout;
 			BOOST_FOREACH(ProcessNode & node, this->processes) {
 				node.traverseBottomUp(boost::phoenix::bind<bool>(&Execution::cleanUpIncomplete, this, _1, _2, boost::ref(sout)));
@@ -268,6 +337,7 @@ bool Execution::complete(bool & isFirst) {
 		}
 		/* delete old remains and update database */
 		if (this->config.removeRemains && this->db.isOpen()) {
+			const RuntimeCheck count(this->config.verbosity, "deleted old remains and updated database");
 			this->db.setAllFlags(1); /* reset marks */
 			/* mark all output files */
 			BOOST_FOREACH(ProcessNode & node, this->processes) {

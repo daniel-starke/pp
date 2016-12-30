@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-11-19
+ * @version 2016-12-29
  */
 #ifndef __PP_EXECUTION_HPP__
 #define __PP_EXECUTION_HPP__
@@ -237,6 +237,18 @@ public:
 	bool execute(boost::asio::io_service & ioService, const ProgressCallback & callProgress, const ExecutionCallback & callFinally);
 	bool complete(bool & isFirst);
 private:
+	/**
+	 * Callback function to print out the process tree.
+	 * 
+	 * @param[in,out] element - reset this node
+	 * @param[in] level - hierarchical level of the given process node with the dependency tree
+	 * @return true on success, else false
+	 */
+	static bool printProcessTree(ProcessNode::ValueType & element, const size_t level) {
+		std::cerr << "pp: " << std::string(level * 2, ' ') << element.process.getId() << std::endl;
+		return true;
+	}
+
 	/**
 	 * Callback function to reset a given process node.
 	 *

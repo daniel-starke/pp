@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2014-2016 Daniel Starke
  * @date 2014-09-28
- * @version 2016-11-20
+ * @version 2016-11-24
  */
 #ifndef __LIBPCFXX_TIME_UTILITY_HPP__
 #define __LIBPCFXX_TIME_UTILITY_HPP__
@@ -386,7 +386,7 @@ public:
 	 * @li %lf - milliseconds part
 	 * @li %lF - milliseconds part with 3 digits
 	 * 
-	 * Recent and global suffixes ('x' stands for 'r' or 'l'):
+	 * Recent and global suffixes ('x' stands for 'r' or 'g'):
 	 * @li %xf - milliseconds part
 	 * @li %xF - total number of milliseconds (rounded down)
 	 * @li %xs - seconds part

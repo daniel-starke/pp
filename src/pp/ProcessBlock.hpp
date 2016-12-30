@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-03-22
- * @version 2016-11-20
+ * @version 2016-12-30
  */
 #ifndef __PP_PROCESSBLOCK_HPP__
 #define __PP_PROCESSBLOCK_HPP__
@@ -62,11 +62,13 @@ private:
 private:
 	LineInfo lineInfo; /**< Line information where this process block was defined. */
 	Type type; /**< Process block type. @see Type */
+	VariableHandler globalVars; /**< Global variables at current scope. */
 	PathVariableMap destinations; /**< Map of destination files by variable name -> path. */
 	PathVariableMap dependencies; /**< Map of additional dependency files by variable name -> path. */
 	CommandVector commands; /**< List of commands associated to this process block. */
 	boost::wregex filter; /**< Input file filter as regular expression. */
 	std::string filterStr; /**< Input file filter as string. */
+	bool invertFilter; /**< Set true to invert the meaning of the filter. */
 public:
 	/** Default constructor. */
 	explicit ProcessBlock():
@@ -93,7 +95,32 @@ public:
 #endif /* PCF_IS_WIN */
 			| boost::regex_constants::no_except
 		),
-		filterStr(boost::locale::conv::utf_to_utf<char>(f))
+		filterStr(boost::locale::conv::utf_to_utf<char>(f)),
+		invertFilter(false)
+	{}
+	
+	/**
+	 * Constructor.
+	 * 
+	 * @param[in] t - process block type
+	 * @param[in] f - input file filter as regular expression
+	 * @param[in] i - set true to invert the meaning of the input file filter
+	 * @param[in] li - defined script location
+	 */
+	explicit ProcessBlock(const Type t, const std::wstring & f, const bool i, const LineInfo & li = LineInfo()):
+		lineInfo(li),
+		type(t),
+		filter(
+			f,
+			boost::regex_constants::perl
+			| boost::regex_constants::optimize
+#if defined(PCF_IS_WIN)
+			| boost::regex_constants::icase
+#endif /* PCF_IS_WIN */
+			| boost::regex_constants::no_except
+		),
+		filterStr(boost::locale::conv::utf_to_utf<char>(f)),
+		invertFilter(i)
 	{}
 	
 	/**
@@ -104,11 +131,13 @@ public:
 	ProcessBlock(const ProcessBlock & o):
 		lineInfo(o.lineInfo),
 		type(o.type),
+		globalVars(o.globalVars),
 		destinations(o.destinations),
 		dependencies(o.dependencies),
 		commands(o.commands),
 		filter(o.filter),
-		filterStr(o.filterStr)
+		filterStr(o.filterStr),
+		invertFilter(o.invertFilter)
 	{}
 	
 	/**
@@ -121,11 +150,13 @@ public:
 		if (this != &o) {
 			this->lineInfo = o.lineInfo;
 			this->type = o.type;
+			this->globalVars = o.globalVars;
 			this->destinations = o.destinations;
 			this->dependencies = o.dependencies;
 			this->commands = o.commands;
 			this->filter = o.filter;
 			this->filterStr = o.filterStr;
+			this->invertFilter = o.invertFilter;
 		}
 		return *this;
 	}
@@ -154,9 +185,10 @@ public:
 	 * Sets the input file filter as regular expression.
 	 *
 	 * @param[in] f - input file filter as regular expression
+	 * @param[in] i - set true to invert the meaning of the input file filter
 	 * @return reference to this object for chained operations
 	 */
-	ProcessBlock & setFilter(const std::wstring & f) {
+	ProcessBlock & setFilter(const std::wstring & f, const bool i = false) {
 		this->filter = boost::wregex(
 			f,
 			boost::regex_constants::perl
@@ -167,6 +199,7 @@ public:
 			| boost::regex_constants::no_except
 		);
 		this->filterStr = boost::locale::conv::utf_to_utf<char>(f);
+		this->invertFilter = i;
 		return *this;
 	}
 	
@@ -223,7 +256,7 @@ public:
 			const RegExNamedCaptureSet namedCaptures = getRegExCaptureNames(this->filterStr);
 			boost::wsmatch what;
 			
-			if ( boost::regex_match(wstr, what, this->filter) ) {
+			if ( boost::regex_match(wstr, what, this->filter) && ( ! this->invertFilter )) {
 				VariableMap captures;
 				/* overwrite previous captures with named captures from the input filter */
 				BOOST_FOREACH(const std::string & tag, namedCaptures) {
@@ -237,6 +270,9 @@ public:
 					}
 				}
 				literal->addRegexCaptures(captures);
+				filteredInput.push_back(literal);
+			} else if ( this->invertFilter ) {
+				literal->addRegexCaptures(VariableMap());
 				filteredInput.push_back(literal);
 			}
 		}
@@ -276,7 +312,7 @@ public:
 				gotFile = true;
 			}
 			if ( ! fileList.empty() ) {
-				if ((*fileList.rbegin()) != separator) {
+				if (*(fileList.rbegin()) != separator) {
 					fileList.push_back(separator);
 					fileList.append(str);
 				} else {
@@ -286,7 +322,7 @@ public:
 				fileList = str;
 			}
 			if ( ! quotedFileList.empty() ) {
-				if ((*quotedFileList.rbegin()) != separator) {
+				if (*(quotedFileList.rbegin()) != separator) {
 					quotedFileList.push_back(separator);
 					quotedFileList.append(quotedStr);
 				} else {
@@ -342,7 +378,8 @@ public:
 		bool allNeedsToBeBuild, outputDependsOnAll, isFirst;
 		ProcessTransitionVector thisTransitions;
 		PathLiteralPtrVector filteredInput;
-		VariableHandler vars;
+		VariableHandler vars = this->globalVars;
+		vars.clearDynamicVariables();
 		
 		if (this->type != NONE) {
 			/* create filtered input vector */
@@ -351,7 +388,7 @@ public:
 				const std::wstring wstr = boost::locale::conv::utf_to_utf<wchar_t>(str);
 				const RegExNamedCaptureSet namedCaptures = getRegExCaptureNames(this->filterStr);
 				boost::wsmatch what;
-				if ( boost::regex_match(wstr, what, this->filter) ) {
+				if ( boost::regex_match(wstr, what, this->filter) && ( ! this->invertFilter )) {
 					VariableMap captures;
 					/* overwrite previous captures with named captures from the input filter */
 					BOOST_FOREACH(const std::string & tag, namedCaptures) {
@@ -366,10 +403,13 @@ public:
 					}
 					literal->addRegexCaptures(captures);
 					filteredInput.push_back(literal);
+				} else if ( this->invertFilter ) {
+					literal->addRegexCaptures(VariableMap());
+					filteredInput.push_back(literal);
 				}
 			}
 			
-			vars = this->createVariablesUnfiltered(filteredInput, mostRecentChange, allNeedsToBeBuild);
+			vars.addScopes(this->createVariablesUnfiltered(filteredInput, mostRecentChange, allNeedsToBeBuild).getScopes());
 			
 			/* check if command depends on all input files */
 			outputDependsOnAll = false;
@@ -513,10 +553,18 @@ public:
 								}
 							} else if ( output.hasFlags(PathLiteral::TEMPORARY) ) {
 								/* non-existing temporary output keeps track of most recent input/dependency modification to aid temporary creation decision */
-								if (( ! (mostRecentChange.is_not_a_date_time() || mostRecentDepChange.is_not_a_date_time()) ) && mostRecentDepChange > mostRecentChange) {
-									output.setLastModification(mostRecentDepChange);
+								if (outputDependsOnAll || this->type == ALL) {
+									if (( ! (mostRecentChange.is_not_a_date_time() || mostRecentDepChange.is_not_a_date_time()) ) && mostRecentDepChange > mostRecentChange) {
+										output.setLastModification(mostRecentDepChange);
+									} else {
+										output.setLastModification(mostRecentChange);
+									}
 								} else {
-									output.setLastModification(mostRecentChange);
+									if (( ! (mostRecentChange.is_not_a_date_time() || mostRecentDepChange.is_not_a_date_time()) ) && mostRecentDepChange > mostRecentChange) {
+										output.setLastModification(mostRecentDepChange);
+									} else {
+										output.setLastModification(literal->getLastModification());
+									}
 								}
 							} else {
 								if (config.verbosity >= VERBOSITY_DEBUG) {

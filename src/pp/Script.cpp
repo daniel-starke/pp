@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-24
- * @version 2016-11-17
+ * @version 2016-12-28
  * @remarks May fail to compile with GCC due to a bug for MinGW target within the GC
  * ( https://gcc.gnu.org/bugzilla/show_bug.cgi?id=66488 ).
  */
@@ -59,6 +59,7 @@ void Script::reset() {
 	this->mainSource = boost::filesystem::path();
 	this->config = this->initialConfig;
 	this->vars = VariableHandler();
+	this->localVars = VariableHandler();
 	if ( this->config.environmentVariables ) {
 		this->vars.addScope(this->environment);
 	} else {
@@ -68,6 +69,7 @@ void Script::reset() {
 		this->vars.addScope();
 	}
 	this->vars.addScope();
+	this->localVars.addScope();
 	this->processes.clear();
 	this->targets.clear();
 	this->vars.setDynamicVariables(dynVars);

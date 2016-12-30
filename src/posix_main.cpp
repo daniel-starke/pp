@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2014-2016 Daniel Starke
  * @date 2014-03-09
- * @version 2016-11-18
+ * @version 2016-12-30
  */
 #include <cstdlib>
 #include <boost/locale.hpp>
@@ -45,7 +45,7 @@ int wmain(int argc, char ** argv, char ** enpv) {
 int main(int argc, char ** argv, char ** enpv) {
 #endif
 	/* handle Unicode correctly */
-	std::locale::global(boost::locale::generator().generate("UTF-8"));
+	std::locale::global(boost::locale::generator().generate(""));
 #if defined(PCF_IS_WIN) && defined(_UNICODE)
 	wchar_t ** wenpv, ** wargv;
 	int wargc, si = 0;

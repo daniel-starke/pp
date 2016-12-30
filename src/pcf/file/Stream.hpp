@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2014-2016 Daniel Starke
  * @date 2014-10-11
- * @version 2016-05-01
+ * @version 2016-12-23
  * @remarks This was not practical: http://sourceforge.net/p/mingw-w64/mailman/message/27708198/
  */
 #ifndef __LIBPCFXX_FILE_STREAM_HPP__
@@ -112,7 +112,7 @@ public:
 			);
 		}
 		return static_cast<std::streamsize>(
-			(offset - static_cast<boost::iostreams::stream_offset>(offset % static_cast<std::streamsize>(sizeof(wchar_t)))) / sizeof(wchar_t)
+			static_cast<size_t>(offset - static_cast<boost::iostreams::stream_offset>(offset % static_cast<std::streamsize>(sizeof(wchar_t)))) / sizeof(wchar_t)
 		);
 	}
 	
@@ -137,7 +137,7 @@ public:
 			);
 		}
 		return static_cast<std::streamsize>(
-			(offset - static_cast<boost::iostreams::stream_offset>(offset % static_cast<std::streamsize>(sizeof(wchar_t)))) / sizeof(wchar_t)
+			static_cast<size_t>(offset - static_cast<boost::iostreams::stream_offset>(offset % static_cast<std::streamsize>(sizeof(wchar_t)))) / sizeof(wchar_t)
 		);
 	}
 	

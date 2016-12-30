@@ -9,7 +9,7 @@ before_script:
  - ls /usr/lib
 script:
  - sudo chmod -R 755 * || exit 1
- - sed -i 's/-D_WIN32_WINNT=0x0501 -DWIN32_LEAN_AND_MEAN //g' Makefile || exit 1
+ - sed -i 's/-D_WIN32_WINNT=0x0600 -DWIN32_LEAN_AND_MEAN //g' Makefile || exit 1
  - sed -i 's/ -Wno-maybe-uninitialized//g' Makefile || exit 1
  - make PREFIX= CC=$CC CXX=$CXX LD=$CXX AR=ar UNICODE= "LDFLAGS=-s -Wl,--allow-multiple-definition" "pp_lib=libboost_program_options libboost_locale libboost_filesystem libboost_iostreams libboost_date_time libboost_thread libboost_regex libboost_system libsqlite3 libpthread" || exit 1
- - bin/pp.exe --help || exit 1
+ - make PREFIX= CC=$CC CXX=$CXX LD=$CXX AR=ar UNICODE= "LDFLAGS=-s -Wl,--allow-multiple-definition" "pp_lib=libboost_program_options libboost_locale libboost_filesystem libboost_iostreams libboost_date_time libboost_thread libboost_regex libboost_system libsqlite3 libpthread" check || exit 1

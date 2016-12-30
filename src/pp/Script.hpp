@@ -2,8 +2,9 @@
  * @file Script.hpp
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
+ * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-24
- * @version 2016-11-20
+ * @version 2016-12-30
  *
  * Data hierarchy:@n
  * - Execution
@@ -101,6 +102,7 @@ private:
 	Configuration initialConfig; /**< Initial script configuration. */
 	VariableMap environment; /**< Pre-defined environment variables to be passed to the script. */
 	VariableHandler vars; /**< Variable handler for variable substitution. */
+	VariableHandler localVars; /**< Local scope variable handler for variable substitution. */
 	ShellMap shells; /**< Used command shell for command execution. */
 	ProcessMap processes; /**< List of defined processes mapped by its ID. */
 	ExecutionMap targets; /**< List of defined execution targets mapped by its ID. */
@@ -126,7 +128,7 @@ public:
 		initialConfig(c),
 		environment(),
 		vars(vh),
-		progress(0, jobs) /* progress average over the last jobs commands */
+		progress(0, (jobs > 3) ? jobs : 3) /* progress average over the last jobs commands */
 	{
 		this->vars.addDynamicVariable("?");
 		this->vars.addDynamicVariable("*");
@@ -139,12 +141,14 @@ public:
 		} else {
 			this->environment = vs.front();
 		}
+		this->localVars.addScope();
 
 		/* set default shell */
 		Shell defaultShell;
 		std::string shellCmdLine;
 #ifdef PCF_IS_WIN
 		boost::optional<const StringLiteral &> usedShell = vh.get("ComSpec");
+		if ( ! usedShell ) usedShell = vh.get("COMSPEC");
 		if ( usedShell ) {
 			defaultShell.path = pcf::path::resolveExecutable(boost::filesystem::path(usedShell->getString(), pcf::path::utf8));
 			shellCmdLine = "\"" + usedShell->getString() + "\"";
@@ -165,8 +169,7 @@ public:
 			defaultShell.path = pcf::path::resolveExecutable(boost::filesystem::path(std::string("sh"), pcf::path::utf8));
 		}
 		shellCmdLine += " -c \"{?}\"";
-		defaultShell.addReplacement("/\\\\/\\\\");
-		defaultShell.addReplacement("/\"/\\\"");
+		defaultShell.addReplacement("/([\\\\\"])/\\\\\\1/");
 		defaultShell.outputEncoding = Shell::UTF8;
 		defaultShell.raw = false;
 #endif /* Windows */

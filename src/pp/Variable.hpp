@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2016 Daniel Starke
  * @date 2015-01-27
- * @version 2016-11-21
+ * @version 2016-12-28
  */
 #ifndef __PP_VARIABLE_HPP__
 #define __PP_VARIABLE_HPP__
@@ -738,7 +738,7 @@ public:
 	 */
 	bool replaceVariables(const VariableHandler & varHandler);
 	
-	void fold();
+	void fold(const bool final = false, const DynamicVariableSet & dynVars = DynamicVariableSet());
 	
 	static void functionWin(std::string & str);
 	static void functionUnix(std::string & str);
@@ -847,7 +847,7 @@ private:
 		return false;
 	}
 	
-	static bool fold(StringLiteralList & segment);
+	static bool fold(StringLiteralList & segment, const bool final, const DynamicVariableSet & dynVars);
 	void setLiteralFromString(const std::string & str, const ParsingFlags parsingFlags = STANDARD);
 };
 
@@ -1166,6 +1166,18 @@ public:
 	}
 	
 	/**
+	 * Adds the given variable scopes (more local than the previous ones).
+	 *
+	 * @param[in] scopes - new variable scopes
+	 * @return a reference to the current variable scope
+	 */
+	VariableMap & addScopes(const VariableScopes & scopes) {
+		this->varScopes.insert(this->varScopes.end(), scopes.begin(), scopes.end());
+		if ( this->varScopes.empty() ) return this->addScope();
+		return this->varScopes.back();
+	}
+	
+	/**
 	 * Returns a reference to all variable scopes.
 	 * 
 	 * @return reference to all variable scopes
@@ -1253,7 +1265,7 @@ public:
 		if ( this->varScopes.empty() ) {
 			BOOST_THROW_EXCEPTION(
 				pcf::exception::OutOfRange()
-				<< pcf::exception::tag::Message(boost::lexical_cast<std::string>(var.getLineInfo()) + ": No scope for the given variable allocated.")
+				<< pcf::exception::tag::Message(boost::lexical_cast<std::string>(var.getLineInfo()) + ": Error: No scope for the given variable allocated.")
 			);
 		}
 		std::string unknownVariableName;
@@ -1262,11 +1274,11 @@ public:
 			case CHECKING_ERROR:
 				BOOST_THROW_EXCEPTION(
 					pcf::exception::SymbolUnknown()
-					<< pcf::exception::tag::Message(boost::lexical_cast<std::string>(var.getLineInfo()) + ": Trying to access unknown variable '" + unknownVariableName + "'.")
+					<< pcf::exception::tag::Message(boost::lexical_cast<std::string>(var.getLineInfo()) + ": Error: Trying to access unknown variable \"" + unknownVariableName + "\".")
 				);
 				break;
 			case CHECKING_WARN:
-				std::cerr << var.getLineInfo() << ": Trying to access unknown variable '" << unknownVariableName << "'." << std::endl;
+				std::cerr << var.getLineInfo() << ": Warning: Trying to access unknown variable \"" << unknownVariableName << "\"." << std::endl;
 				break;
 			default:
 				/* do nothing */

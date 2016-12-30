@@ -3,17 +3,20 @@
  * @author Daniel Starke
  * @copyright Copyright 2016 Daniel Starke
  * @date 2016-11-20
- * @version 2016-11-20
+ * @version 2016-12-22
  */
 #ifndef __PP_UTILITY_HPP__
 #define __PP_UTILITY_HPP__
 
 
+#include <sstream>
 #include <string>
 #include <boost/config/warning_disable.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/foreach.hpp>
+#include <pcf/exception/General.hpp>
 #include "Type.hpp"
+#include "Variable.hpp"
 
 
 namespace pp {
@@ -58,6 +61,38 @@ static std::basic_string<CharT> reduceConsecutiveSlashes(const std::basic_string
 		}
 	}
 	return result;
+}
+
+
+/** LineInfo marker. @see pp::addLineInfoToException */
+typedef boost::error_info<struct TagLineInfoMarker, bool> LineInfoMarker;
+
+
+/**
+ * Adds the given line information to the passed exception and marks it to prevent further additions.
+ * 
+ * @param[in] li - line information to add
+ * @param[in] e - add to this exception and throw it again
+ * @throws given exception
+ * @tparam T - exception type
+ */
+template <typename T>
+static void addLineInfoToException(const pp::LineInfo & li, const T & e) {
+	if (const std::string * msg = boost::get_error_info<pcf::exception::tag::Message>(e)) {
+		if (const bool * marker = boost::get_error_info<LineInfoMarker>(e)) {
+			throw e; /* already has line information */
+		} else {
+			std::ostringstream sout;
+			sout << li << ": Error: " << *msg;
+			throw 
+				T(e)
+				<< pcf::exception::tag::Message(sout.str())
+				<< LineInfoMarker(true)
+			;
+		}
+	} else {
+		throw e; /* no message contained to add line information to */
+	}
 }
 
 
