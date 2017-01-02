@@ -2,10 +2,17 @@ language: cpp
 compiler: gcc
 os: linux
 before_script:
+ - sudo apt-get update -qq
+ - sudo apt-get install chrpath devscripts -y || true
+ - sudo apt-get source libsqlite3-0 -y
+ - sudo apt-get build-dep libsqlite3-0 -y || true
+ - sed -i '/export CFLAGS/a \        -DSQLITE_ENABLE_COLUMN_METADATA -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT=1 \\' sqlite3*/debian/rules
+ - cd sqlite3* && debuild -b -uc -us && cd $OLDPWD
+ - sudo dpkg -i *.deb
  - sudo apt-get remove libboost-all-dev -y
  - sudo add-apt-repository ppa:boost-latest/ppa -y
  - sudo apt-get update -qq
- - sudo apt-get install libboost1.54-all-dev libsqlite3-dev libcloog-ppl0 -y
+ - sudo apt-get install libboost1.54-all-dev libcloog-ppl0 -y
  - ls /usr/lib
 script:
  - sudo chmod -R 755 * || exit 1
