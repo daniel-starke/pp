@@ -49,8 +49,10 @@ To build the setup (needs NSIS):
 
     make setup
 
-[![Linux Build Status](https://travis-ci.org/daniel-starke/pp.svg?label=Linux%20build)](https://travis-ci.org/daniel-starke/pp)  
+[![Linux GCC Build Status](https://img.shields.io/travis/daniel-starke/pp/master.svg?label=Linux)](https://travis-ci.org/daniel-starke/pp)
+[![Windows LLVM/Clang Build Status](https://img.shields.io/appveyor/ci/daniel-starke/pp/master.svg?label=Windows)](https://ci.appveyor.com/project/daniel-starke/pp)    
 
+Clang/LLVM build fails when throwing an exception in the resulting executable.  
 MSVC is not supported due to compiler bugs.
 
 License

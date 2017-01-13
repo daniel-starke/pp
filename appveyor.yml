@@ -1,0 +1,16 @@
+version: 1.3.0.{build}
+
+init:
+ - ps: (New-Object Net.WebClient).DownloadFile('https://gist.github.com/daniel-starke/937365eb6fadfc8b26ede5452c6f56bc/raw/33d1b93994ec835c8f9ff6394f54c76f3e97e967/av-mount.bat', 'C:\av-mount.bat')
+
+install:
+ - git clone -q --branch=master https://github.com/daniel-starke/mingw64.git C:\projects\mingw64
+ - 7z x -oC:\projects\mingw64\msys\mingw64-64 C:\projects\mingw64\*.7z
+ - C:\av-mount.bat
+
+build_script:
+ - C:\msys64\usr\bin\bash -lc "sed -i -e 's/-fgraphite/-fexceptions -ftemplate-depth=1024/g' -e 's/-Wno-maybe-uninitialized/-DBOOST_USE_WINDOWS_H/g' /c/projects/pp/Makefile"
+ - C:\msys64\usr\bin\bash -lc "make -C /c/projects/pp 'PATH=/e/msys/mingw64-64/bin:/bin' CC=clang CXX=clang++ LD=clang++"
+
+test_script:
+ - C:\msys64\usr\bin\bash -lc "make -C /c/projects/pp 'PATH=/e/msys/mingw64-64/bin:/bin' check"
