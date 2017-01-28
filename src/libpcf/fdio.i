@@ -1,11 +1,11 @@
 /**
  * @file fdio.i
  * @author Daniel Starke
- * @copyright Copyright 2016 Daniel Starke
+ * @copyright Copyright 2016-2017 Daniel Starke
  * @see fdios.h
  * @see fdious.h
  * @date 2016-08-17
- * @version 2016-11-08
+ * @version 2017-01-14
  * @internal This file is never used or compiled directly but only included.
  * @remarks Define CHAR_T to the character type before including this file.
  * @remarks See FPOPEN_FUNC() and FPCLOSE_FUNC() for further notes.
@@ -17,7 +17,7 @@
 #include <string.h>
 #include <libpcf/target.h>
 
-#if PCF_IS_WIN
+#ifdef PCF_IS_WIN
 #include <fcntl.h>
 #include <io.h>
 #include <windows.h>
@@ -413,7 +413,7 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, cons
 	if ((((int)mode) & FDIO_USE_STDIN) != 0) {
 		siPtr->hStdInput = pStandardInput[READ_PIPE];
 	} else if (input != NULL) {
-		siPtr->hStdInput = (HANDLE)_get_osfhandle(_fileno(input));
+		siPtr->hStdInput = (HANDLE)_get_osfhandle(fileno(input));
 	} else {
 		siPtr->hStdInput = GetStdHandle(STD_INPUT_HANDLE);
 		if (siPtr->hStdInput == INVALID_HANDLE_VALUE) goto onerror;
@@ -507,27 +507,27 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, cons
 	
 	CloseHandle(pi.hThread);
 	flags = 0;
-	if ((((int)mode) & FDIO_BINARY_PIPE) == 0) flags |= _O_TEXT;
+	if ((((int)mode) & FDIO_BINARY_PIPE) == 0) flags |= O_TEXT;
 	fd->pid = pi.hProcess;
 	if ((((int)mode) & FDIO_USE_STDIN) != 0) {
-		fd->in = _fdopen(
-			_open_osfhandle((intptr_t)pStandardInput[WRITE_PIPE], flags),
+		fd->in = fdopen(
+			open_osfhandle((intptr_t)pStandardInput[WRITE_PIPE], flags),
 			(((int)mode) & FDIO_BINARY_PIPE) != 0 ? "wb" : "w"
 		);
 	} else {
 		fd->in = NULL;
 	}
 	if ((((int)mode) & FDIO_USE_STDOUT) != 0) {
-		fd->out = _fdopen(
-			_open_osfhandle((intptr_t)pStandardOutput[READ_PIPE], flags | _O_RDONLY),
+		fd->out = fdopen(
+			open_osfhandle((intptr_t)pStandardOutput[READ_PIPE], flags | O_RDONLY),
 			(((int)mode) & FDIO_BINARY_PIPE) != 0 ? "rb" : "r"
 		);
 	} else {
 		fd->out = NULL;
 	}
 	if ((((int)mode) & FDIO_USE_STDERR) != 0 && (((int)mode) & FDIO_COMBINE) == 0) {
-		fd->err = _fdopen(
-			_open_osfhandle((intptr_t)pStandardError[READ_PIPE], flags | _O_RDONLY),
+		fd->err = fdopen(
+			open_osfhandle((intptr_t)pStandardError[READ_PIPE], flags | O_RDONLY),
 			(((int)mode) & FDIO_BINARY_PIPE) != 0 ? "rb" : "r"
 		);
 	} else {

@@ -1,9 +1,9 @@
 /**
  * @file Utility.cpp
  * @author Daniel Starke
- * @copyright Copyright 2013-2016 Daniel Starke
+ * @copyright Copyright 2013-2017 Daniel Starke
  * @date 2013-11-23
- * @version 2016-12-28
+ * @version 2017-01-14
  */
 #include <algorithm>
 #include <cstdlib>
@@ -551,6 +551,17 @@ boost::filesystem::path getExecutablePath(boost::system::error_code & errorCode)
 			errorCode = boost::system::error_code(errno, boost::system::generic_category());
 			return boost::filesystem::path();
 		}
+#if defined(__CYGWIN__)
+		exePath.resize(static_cast<size_t>(result));
+		if ( boost::filesystem::is_regular_file(boost::filesystem::path(exePath, utf8)) ) {
+			return boost::filesystem::path(exePath, utf8);
+		} else if ( boost::filesystem::is_regular_file(boost::filesystem::path(exePath + ".exe", utf8)) ) {
+			return boost::filesystem::path(exePath + ".exe", utf8);
+		} else {
+			errorCode = boost::system::errc::make_error_code(boost::system::errc::no_such_file_or_directory);
+			return boost::filesystem::path();
+		}
+#endif
 	}
 #endif /* ! PCF_IS_WIN */
 	exePath.resize(static_cast<size_t>(result));

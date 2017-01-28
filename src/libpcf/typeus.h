@@ -1,7 +1,7 @@
 /**
  * @file typeus.h
  * @author Daniel Starke
- * @copyright Copyright 2014-2016 Daniel Starke
+ * @copyright Copyright 2014-2017 Daniel Starke
  * @see typeus.c
  * @date 2014-11-08
  * @version 2016-05-01

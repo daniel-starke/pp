@@ -1,10 +1,10 @@
 /**
  * @file fdio.c
  * @author Daniel Starke
- * @copyright Copyright 2015-2016 Daniel Starke
+ * @copyright Copyright 2015-2017 Daniel Starke
  * @see fdio.h
  * @date 2015-02-28
- * @version 2016-11-26
+ * @version 2017-01-14
  */
 #define _POSIX_C_SOURCE 200809L
 #include <stdlib.h>
@@ -33,22 +33,22 @@
  * @see tFdioMode
  */
 int fdio_setMode(FILE * fd, tFdioMode mode) {
-#ifdef PCF_IS_WIN
+#if defined(PCF_IS_WIN) && !defined(__CYGWIN__)
 	switch (mode) {
 	case FDIO_TEXT:
-		return _setmode(_fileno(fd), _O_TEXT) == -1 ? 0 : 1;
+		return setmode(fileno(fd), O_TEXT) == -1 ? 0 : 1;
 		break;
 	case FDIO_WTEXT:
-		return _setmode(_fileno(fd), _O_WTEXT) == -1 ? 0 : 1;
+		return setmode(fileno(fd), O_WTEXT) == -1 ? 0 : 1;
 		break;
 	case FDIO_UTF8:
-		return _setmode(_fileno(fd), _O_U8TEXT) == -1 ? 0 : 1;
+		return setmode(fileno(fd), O_U8TEXT) == -1 ? 0 : 1;
 		break;
 	case FDIO_UTF16:
-		return _setmode(_fileno(fd), _O_U16TEXT) == -1 ? 0 : 1;
+		return setmode(fileno(fd), O_U16TEXT) == -1 ? 0 : 1;
 		break;
 	case FDIO_BINARY:
-		return _setmode(_fileno(fd), _O_BINARY) == -1 ? 0 : 1;
+		return setmode(fileno(fd), O_BINARY) == -1 ? 0 : 1;
 		break;
 	}
 #else /* ! PCF_IS_WIN */

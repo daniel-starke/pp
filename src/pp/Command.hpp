@@ -1,9 +1,9 @@
 /**
  * @file Command.hpp
  * @author Daniel Starke
- * @copyright Copyright 2015-2016 Daniel Starke
+ * @copyright Copyright 2015-2017 Daniel Starke
  * @date 2015-03-22
- * @version 2016-12-30
+ * @version 2017-01-10
  */
 #ifndef __PP_COMMAND_HPP__
 #define __PP_COMMAND_HPP__
@@ -313,7 +313,9 @@ public:
 		std::string unknownVariable;
 		this->reset();
 		boost::mutex::scoped_lock lock(this->mutex);
-		if ( ! this->command.replaceVariables(unknownVariable, vars, DynamicVariableSet()) ) {
+		DynamicVariableSet stillDynamic;
+		stillDynamic.insert("PP_THREAD");
+		if ( ! this->command.replaceVariables(unknownVariable, vars, stillDynamic) ) {
 			if ( config.variableChecking ) {
 				BOOST_THROW_EXCEPTION(
 					pcf::exception::SymbolUnknown()

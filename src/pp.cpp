@@ -1,7 +1,7 @@
 /**
  * @file pp.cpp
  * @author Daniel Starke
- * @copyright Copyright 2015-2016 Daniel Starke
+ * @copyright Copyright 2015-2017 Daniel Starke
  * @date 2015-01-24
  * @version 2016-12-23
  */
@@ -373,7 +373,7 @@ void printHelp() {
 	"SQLite3 version: " SQLITE_VERSION "\n"
 	"\n"
 	"Parallel Processor " PP_VERSION "\n"
-	"(c) Copyright 2015-2016 " PP_AUTHOR
+	"(c) Copyright 2015-2017 " PP_AUTHOR
 	<< endl;
 }
 

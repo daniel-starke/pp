@@ -1,7 +1,7 @@
 /**
  * @file libpcf.h
  * @author Daniel Starke
- * @copyright Copyright 2010-2016 Daniel Starke
+ * @copyright Copyright 2010-2017 Daniel Starke
  * @date 2010-01-27
  * @version 2016-05-01
  *
@@ -12,9 +12,9 @@
 #define __LIBPCF_H__
 
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__cdecl)
 /** Ignore __cdecl attribute for non Windows platforms. */
-#define __cdecl
+#undef __cdecl
 #endif /* WIN32 */
 
 

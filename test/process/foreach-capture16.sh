@@ -1,6 +1,6 @@
 # @file foreach-capture16.sh
 # @author Daniel Starke
-# @copyright Copyright 2016 Daniel Starke
+# @copyright Copyright 2016-2017 Daniel Starke
 # @date 2016-12-28
 # @version 2016-12-28
 

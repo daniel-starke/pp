@@ -1,6 +1,6 @@
 # @file if-nesting.sh
 # @author Daniel Starke
-# @copyright Copyright 2016 Daniel Starke
+# @copyright Copyright 2016-2017 Daniel Starke
 # @date 2016-11-30
 # @version 2016-12-02
 

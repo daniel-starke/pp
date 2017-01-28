@@ -1,9 +1,9 @@
 /**
  * @file ProcessBlock.hpp
  * @author Daniel Starke
- * @copyright Copyright 2015-2016 Daniel Starke
+ * @copyright Copyright 2015-2017 Daniel Starke
  * @date 2015-03-22
- * @version 2016-12-30
+ * @version 2017-01-03
  */
 #ifndef __PP_PROCESSBLOCK_HPP__
 #define __PP_PROCESSBLOCK_HPP__
@@ -532,6 +532,10 @@ public:
 								if ( origDestinationFile->second.hasFlags(PathLiteral::TEMPORARY) ) {
 									output.addFlags(PathLiteral::TEMPORARY);
 								}
+							}
+							/* handle forwarded temporary output */
+							if (( ! outputDependsOnAll ) && literal->hasFlags(PathLiteral::TEMPORARY) && boost::filesystem::path(literal->getString(), pcf::path::utf8) == path) {
+								output.addFlags(PathLiteral::TEMPORARY);
 							}
 							/* if output file already exists */
 							if ( boost::filesystem::exists(path) ) {

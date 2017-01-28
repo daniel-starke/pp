@@ -1,7 +1,7 @@
 /**
  * @file Gap.hpp
  * @author Daniel Starke
- * @copyright Copyright 2015-2016 Daniel Starke
+ * @copyright Copyright 2015-2017 Daniel Starke
  * @date 2015-11-27
  * @version 2016-11-20
  * @brief Enables single skip parser invocation as gap and gap(p) for explicit skipping.

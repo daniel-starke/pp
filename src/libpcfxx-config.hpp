@@ -1,7 +1,7 @@
 /**
  * @file libpcfxx-config.hpp
  * @author Daniel Starke
- * @copyright Copyright 2014-2016 Daniel Starke
+ * @copyright Copyright 2014-2017 Daniel Starke
  * @date 2014-11-09
  * @version 2016-05-01
  *
@@ -12,8 +12,9 @@
 #define __LIBPCFXX_CONFIG_HPP__
 
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__cdecl)
 /** Ignore __cdecl attribute for non Windows platforms. */
+#undef __cdecl
 #define __cdecl
 #endif /* WIN32 */
 

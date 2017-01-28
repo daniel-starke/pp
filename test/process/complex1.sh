@@ -1,9 +1,8 @@
 # @file complex1.sh
 # @author Daniel Starke
-# @copyright Copyright 2016 Daniel Starke
-# @copyright Copyright 2016 Daniel Starke
+# @copyright Copyright 2016-2017 Daniel Starke
 # @date 2016-12-30
-# @version 2016-12-30
+# @version 2017-01-03
 
 complex1_before() {
 	rm -rf complex1
@@ -13,7 +12,8 @@ complex1_before() {
 complex1_after() {
 	local aPattern
 	to_var aPattern <<"_END"
-^"\\?complex1/l2_2\\.txt"\\? "\\?complex1/l1_all\\.txt"\\?[[:space:]]*$
+"\\?complex1/l2_2\\.txt"\\?
+"\\?complex1/l1_all\\.txt"\\?
 _END
 	sub_check_pattern "final output file" "complex1/out.txt" 0 "${aPattern}"
 	[ "${clean}" -eq 1 ] && rm -rf complex1

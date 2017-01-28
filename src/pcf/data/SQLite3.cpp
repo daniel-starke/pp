@@ -1,9 +1,9 @@
 /**
  * @file SQLite3.cpp
  * @author Daniel Starke
- * @copyright Copyright 2014-2016 Daniel Starke
+ * @copyright Copyright 2014-2017 Daniel Starke
  * @date 2014-01-23
- * @version 2016-05-01
+ * @version 2017-01-14
  */
 #include <string>
 #include <boost/cstdint.hpp>
@@ -25,7 +25,7 @@ namespace data {
 template <>
 pcf::data::OctetBlock SQLite3::Statement::getColumn(const int i) {
 	const boost::uint8_t * byteData = reinterpret_cast<const boost::uint8_t *>(sqlite3_column_blob(this->statement, i));
-	const int byteCount = sqlite3_column_bytes(this->statement, i);
+	const int byteCount = static_cast<int>(sqlite3_column_bytes(this->statement, i));
 	if (byteCount < 1) return pcf::data::OctetBlock();
 	return pcf::data::OctetBlock(byteData, byteData + byteCount);
 }
@@ -58,7 +58,7 @@ boost::int64_t SQLite3::Statement::getColumn(const int i) {
 template <>
 std::string SQLite3::Statement::getColumn(const int i) {
 	const char * byteData = reinterpret_cast<const char *>(sqlite3_column_text(this->statement, i));
-	const int byteCount = sqlite3_column_bytes(this->statement, i);
+	const int byteCount = static_cast<int>(sqlite3_column_bytes(this->statement, i));
 	if (byteCount < 1) return std::string();
 	return std::string(byteData, byteData + byteCount);
 }
@@ -67,7 +67,7 @@ std::string SQLite3::Statement::getColumn(const int i) {
 template <>
 std::wstring SQLite3::Statement::getColumn(const int i) {
 	const char * byteData = reinterpret_cast<const char *>(sqlite3_column_text16(this->statement, i));
-	const int byteCount = sqlite3_column_bytes16(this->statement, i);
+	const int byteCount = static_cast<int>(sqlite3_column_bytes16(this->statement, i));
 	if (byteCount < 1) return std::wstring();
 	return std::wstring(reinterpret_cast<const wchar_t *>(byteData), reinterpret_cast<const wchar_t *>(byteData + byteCount));
 }

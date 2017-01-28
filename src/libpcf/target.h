@@ -1,9 +1,9 @@
 /**
  * @file target.h
  * @author Daniel Starke
- * @copyright Copyright 2012-2016 Daniel Starke
+ * @copyright Copyright 2012-2017 Daniel Starke
  * @date 2012-12-08
- * @version 2016-05-01
+ * @version 2017-01-14
  */
 #ifndef __LIBPCF_TARGET_H__
 #define __LIBPCF_TARGET_H__
@@ -26,7 +26,8 @@ extern "C" {
 
 
 #if defined(__WIN32__) || defined(__WIN64__) || defined(WIN32) \
- || defined(WINNT) || defined(_WIN32) || defined(__WIN32) || defined(__WINNT)
+ || defined(WINNT) || defined(_WIN32) || defined(__WIN32) || defined(__WINNT) \
+ || defined(__MINGW32__) || defined(__MINGW64__)
 # ifndef PCF_IS_WIN
 /** Defined if compiler target is windows. */
 #  define PCF_IS_WIN 1
@@ -41,9 +42,9 @@ extern "C" {
 #endif /* windows */
 
 
-#if defined(unix) || defined(__unix) || defined(__unix__) \
+#if !defined(PCF_IS_WIN) && (defined(unix) || defined(__unix) || defined(__unix__) \
  || defined(__gnu_linux__) || defined(linux) || defined(__linux) \
- || defined(__linux__)
+ || defined(__linux__))
 # ifndef PCF_IS_LINUX
 /** Defined if compiler target is linux/unix. */
 # define PCF_IS_LINUX 1
@@ -407,6 +408,22 @@ static inline uint64_t PCF_ROTATE_RIGHT64(uint64_t x, const uint8_t n) {
 #endif /* not _MSC_VER */
 
 
+/* Windows workarounds */
+#ifdef PCF_IS_WIN
+# define fileno _fileno
+# define fdopen _fdopen
+# define setmode _setmode
+# define get_osfhandle _get_osfhandle
+# define open_osfhandle _open_osfhandle
+# define O_TEXT _O_TEXT
+# define O_WTEXT _O_WTEXT
+# define O_U8TEXT _O_U8TEXT
+# define O_U16TEXT _O_U16TEXT
+# define O_BINARY _O_BINARY
+# define O_RDONLY _O_RDONLY
+#endif
+
+
 /* MSVS workarounds */
 #ifdef _MSC_VER
 # define snprintf _snprintf
@@ -415,6 +432,13 @@ static inline uint64_t PCF_ROTATE_RIGHT64(uint64_t x, const uint8_t n) {
 # define vsnwprintf _vsnwprintf
 # define va_copy(dest, src) (dest = src)
 #endif /* _MSC_VER */
+
+
+/* Cygwin workaround */
+#ifdef __CYGWIN__
+# define O_U8TEXT 0x00040000
+# define O_U16TEXT 0x00020000
+#endif /* __CYGWIN__ */
 
 
 /* Define vsnwprintf from vswprintf on Linux systems. */

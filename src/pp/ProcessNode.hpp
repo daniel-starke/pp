@@ -1,7 +1,7 @@
 /**
  * @file ProcessNode.hpp
  * @author Daniel Starke
- * @copyright Copyright 2015-2016 Daniel Starke
+ * @copyright Copyright 2015-2017 Daniel Starke
  * @date 2015-03-22
  * @version 2016-12-29
  */

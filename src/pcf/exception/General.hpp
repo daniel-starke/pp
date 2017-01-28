@@ -1,7 +1,7 @@
 /**
  * @file General.hpp
  * @author Daniel Starke
- * @copyright Copyright 2013-2016 Daniel Starke
+ * @copyright Copyright 2013-2017 Daniel Starke
  * @date 2013-07-04
  * @version 2016-05-01
  */

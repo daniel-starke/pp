@@ -1,9 +1,9 @@
 /**
  * @file Utility.hpp
  * @author Daniel Starke
- * @copyright Copyright 2015-2016 Daniel Starke
+ * @copyright Copyright 2015-2017 Daniel Starke
  * @date 2015-08-04
- * @version 2016-11-20
+ * @version 2017-01-14
  */
 #ifndef __LIBPCFXX_PROCESS_UTILITY_HPP__
 #define __LIBPCFXX_PROCESS_UTILITY_HPP__
@@ -126,11 +126,7 @@ public:
 	 * @throws pcf::exception::NullPointer if the internal handle is NULL
 	 */
 	int getInFd() {
-#ifdef PCF_IS_WIN
-		return _fileno(this->getIn());
-#else /* ! PCF_IS_WIN */
 		return fileno(this->getIn());
-#endif /* PCF_IS_WIN */
 	}
 	
 	/**
@@ -158,11 +154,7 @@ public:
 	 * @throws pcf::exception::NullPointer if the internal handle is NULL
 	 */
 	int getOutFd() {
-#ifdef PCF_IS_WIN
-		return _fileno(this->getOut());
-#else /* ! PCF_IS_WIN */
 		return fileno(this->getOut());
-#endif /* PCF_IS_WIN */
 	}
 	
 	/**
@@ -190,11 +182,7 @@ public:
 	 * @throws pcf::exception::NullPointer if the internal handle is NULL
 	 */
 	int getErrFd() {
-#ifdef PCF_IS_WIN
-		return _fileno(this->getErr());
-#else /* ! PCF_IS_WIN */
 		return fileno(this->getErr());
-#endif /* PCF_IS_WIN */
 	}
 	
 	/**

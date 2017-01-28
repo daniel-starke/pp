@@ -1,11 +1,12 @@
 /**
  * @file posix_main.cpp
  * @author Daniel Starke
- * @copyright Copyright 2014-2016 Daniel Starke
+ * @copyright Copyright 2014-2017 Daniel Starke
  * @date 2014-03-09
- * @version 2016-12-30
+ * @version 2017-01-14
  */
 #include <cstdlib>
+#include <cstdio>
 #include <boost/locale.hpp>
 #include <pcf/os/Target.hpp>
 #include "posix_main.hpp"
@@ -57,23 +58,23 @@ int main(int argc, char ** argv, char ** enpv) {
 	__wgetmainargs(&wargc, &wargv, &wenpv, _CRT_glob, &si);
 	if (GetFileType(GetStdHandle(STD_OUTPUT_HANDLE)) == FILE_TYPE_CHAR) {
 		/* enable UTF-16 output to standard output console */
-		_setmode(_fileno(stdout), _O_U16TEXT);
+		setmode(fileno(stdout), O_U16TEXT);
 		u8cout = new pcf::coding::Utf8ToUtf16StreamBuffer(stdout);
 		out = std::cout.rdbuf();
 		std::cout.rdbuf(u8cout);
 	} else {
 		/* ensure UTF-8 is output without any transformations */
-		_setmode(_fileno(stdout), _O_BINARY);
+		setmode(fileno(stdout), O_BINARY);
 	}
 	if (GetFileType(GetStdHandle(STD_ERROR_HANDLE)) == FILE_TYPE_CHAR) {
 		/* enable UTF-16 output to standard error console */
-		_setmode(_fileno(stderr), _O_U16TEXT);
+		setmode(fileno(stderr), O_U16TEXT);
 		u8cerr = new pcf::coding::Utf8ToUtf16StreamBuffer(stderr);
 		err = std::cerr.rdbuf();
 		std::cerr.rdbuf(u8cerr);
 	} else {
 		/* ensure UTF-8 is output without any transformations */
-		_setmode(_fileno(stderr), _O_BINARY);
+		setmode(fileno(stderr), O_BINARY);
 	}
 	/* process user defined main function */
 	const int result = posix_main(wargc, wargv, wenpv);

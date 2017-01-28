@@ -1,9 +1,9 @@
 /**
  * @file Utility.hpp
  * @author Daniel Starke
- * @copyright Copyright 2016 Daniel Starke
+ * @copyright Copyright 2016-2017 Daniel Starke
  * @date 2016-11-20
- * @version 2016-12-22
+ * @version 2016-12-30
  */
 #ifndef __PP_UTILITY_HPP__
 #define __PP_UTILITY_HPP__
@@ -79,7 +79,7 @@ typedef boost::error_info<struct TagLineInfoMarker, bool> LineInfoMarker;
 template <typename T>
 static void addLineInfoToException(const pp::LineInfo & li, const T & e) {
 	if (const std::string * msg = boost::get_error_info<pcf::exception::tag::Message>(e)) {
-		if (const bool * marker = boost::get_error_info<LineInfoMarker>(e)) {
+		if ( boost::get_error_info<LineInfoMarker>(e) ) {
 			throw e; /* already has line information */
 		} else {
 			std::ostringstream sout;

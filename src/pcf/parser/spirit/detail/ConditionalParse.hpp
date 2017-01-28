@@ -1,7 +1,7 @@
 /**
  * @file ConditionalParse.hpp
  * @author Daniel Starke
- * @copyright Copyright 2015-2016 Daniel Starke
+ * @copyright Copyright 2015-2017 Daniel Starke
  * @date 2015-12-14
  * @version 2016-05-01
  * @remarks Extension to the Boost Spirit2 parser framework.
