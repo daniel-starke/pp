@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2014-2017 Daniel Starke
  * @date 2014-11-09
- * @version 2016-05-01
+ * @version 2017-01-28
  *
  * The file is used to configure some behaviors of
  * the library via per-processor directives.
@@ -14,7 +14,6 @@
 
 #if !defined(_WIN32) && !defined(__cdecl)
 /** Ignore __cdecl attribute for non Windows platforms. */
-#undef __cdecl
 #define __cdecl
 #endif /* WIN32 */
 

@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2010-2017 Daniel Starke
  * @date 2010-01-27
- * @version 2016-05-01
+ * @version 2017-01-28
  *
  * The file is used when including the library and to make sure every
  * function is defined correctly for external usage.
@@ -14,7 +14,7 @@
 
 #if !defined(_WIN32) && !defined(__cdecl)
 /** Ignore __cdecl attribute for non Windows platforms. */
-#undef __cdecl
+#define __cdecl
 #endif /* WIN32 */
 
 
