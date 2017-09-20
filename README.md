@@ -54,7 +54,8 @@ To build the setup (needs NSIS):
 
 MinGW GCC build fails in AppVeyor due to memory limitations.  
 MinGW Clang/LLVM build fails when throwing an exception in the resulting executable.  
-MSVC is not supported due to compiler bugs (unlimited memory consumption).
+MSVC is not supported due to compiler bugs (unlimited memory consumption).  
+A working version for Windows is attached to the release notes.
 
 License
 =======
