@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2013-2017 Daniel Starke
  * @date 2013-11-23
- * @version 2017-01-14
+ * @version 2017-05-08
  */
 #include <algorithm>
 #include <cstdlib>
@@ -793,7 +793,7 @@ bool getRegexPathList(std::vector<boost::filesystem::path> & r, const std::wstri
 							if (++start == end) goto onerror;
 							if (*start == L'{') {
 								if (++start == end) goto onerror;
-								const int i = traits.toi(start, end, 16);
+								const int i = static_cast<int>(traits.toi(start, end, 16));
 								if (start == end
 									|| i < 0
 									|| (std::numeric_limits<std::wstring::value_type>::is_specialized && i > static_cast<int>(std::numeric_limits<std::wstring::value_type>::max()))
@@ -803,7 +803,7 @@ bool getRegexPathList(std::vector<boost::filesystem::path> & r, const std::wstri
 								result.push_back(static_cast<std::wstring::value_type>(i));
 							} else {
 								const std::ptrdiff_t len = std::min(static_cast<std::ptrdiff_t>(2), static_cast<std::ptrdiff_t>(end - start));
-								const int i = traits.toi(start, start + len, 16);
+								const int i = static_cast<int>(traits.toi(start, start + len, 16));
 								if (i < 0 || (std::numeric_limits<std::wstring::value_type>::is_specialized && i > static_cast<int>(std::numeric_limits<std::wstring::value_type>::max()))) {
 									goto onerror;
 								}
@@ -817,7 +817,7 @@ bool getRegexPathList(std::vector<boost::filesystem::path> & r, const std::wstri
 							/* octal escape sequence */
 							if (++start == end) goto onerror;
 							const std::ptrdiff_t len = std::min(static_cast<std::ptrdiff_t>(3), static_cast<std::ptrdiff_t>(end - start));
-							const int i = traits.toi(start, start + len, 8);
+							const int i = static_cast<int>(traits.toi(start, start + len, 8));
 							if (i < 0 || (std::numeric_limits<std::wstring::value_type>::is_specialized && i > static_cast<int>(std::numeric_limits<std::wstring::value_type>::max()))) {
 								goto onerror;
 							}

@@ -431,7 +431,7 @@ struct Script : qi::grammar<Iterator, Skipper> {
 		
 		matchAnyRegexString.name("nothing");
 		matchAnyRegexString = (
-			omit[iter_pos[_a = _1]] >> eps[_pass = phx::bind<bool>(&Script::getRawStringLiteral, this, _val, ".*", _a)]
+			omit[iter_pos[_a = _1]] >> eps[_pass = phx::bind<bool>(&Script::getRawStringLiteral, this, _val, std::string(".*"), _a)]
 		);
 		
 		variableRemoval.name("variable removal");

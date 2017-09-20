@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2017 Daniel Starke
  * @date 2015-03-22
- * @version 2016-12-18
+ * @version 2017-09-16
  */
 #ifndef __PP_PROCESS_HPP__
 #define __PP_PROCESS_HPP__
@@ -452,6 +452,7 @@ public:
 							/* we only need the first non-temporary output */
 							fileInfo.output.insert(output);
 							fileInfo.allOutputExists = fileInfo.allOutputExists && output->hasFlags(PathLiteral::EXISTS);
+							fileInfo.outputWillBeModified = fileInfo.outputWillBeModified || output->hasFlags(PathLiteral::MODIFIED) || output->hasFlags(PathLiteral::FORCED);
 						} else {
 							/* get permanent output from already built up map */
 							TemporaryFileInfo & temporaryFileInfo(temporaryFileInfoMap[output]);
@@ -463,6 +464,7 @@ public:
 								}
 							}
 							fileInfo.allOutputExists = fileInfo.allOutputExists && temporaryFileInfo.allOutputExists;
+							fileInfo.outputWillBeModified = fileInfo.outputWillBeModified || temporaryFileInfo.outputWillBeModified;
 						}
 						if ( ! output->getLastModification().is_not_a_date_time() ) {
 							/* update oldest output file modification date time */

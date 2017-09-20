@@ -52,7 +52,8 @@ To build the setup (needs NSIS):
 [![Linux GCC Build Status](https://img.shields.io/travis/daniel-starke/pp/master.svg?label=Linux)](https://travis-ci.org/daniel-starke/pp)
 [![Windows LLVM/Clang Build Status](https://img.shields.io/appveyor/ci/danielstarke/pp/master.svg?label=Windows)](https://ci.appveyor.com/project/danielstarke/pp)    
 
-MingW Clang/LLVM build fails when throwing an exception in the resulting executable.  
+MinGW GCC build fails in AppVeyor due to memory limitations.  
+MinGW Clang/LLVM build fails when throwing an exception in the resulting executable.  
 MSVC is not supported due to compiler bugs (unlimited memory consumption).
 
 License

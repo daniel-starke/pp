@@ -2,7 +2,7 @@
 # @author Daniel Starke
 # @copyright Copyright 2017 Daniel Starke
 # @date 2017-01-03
-# @version 2017-01-03
+# @version 2017-09-16
 
 temporary2_before() {
 	rm -rf temporary2
@@ -62,11 +62,6 @@ execution : default {
 _END
 
 t_runs="2"
-
-to_var t_text <<"_END"
-^deleting "temporary2/l2_2\\.txt": ok$
-^deleting "temporary2/l2_3\\.txt": ok$
-_END
 
 to_var t_ntext <<"_END"
 echo

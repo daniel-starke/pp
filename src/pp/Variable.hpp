@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2017 Daniel Starke
  * @date 2015-01-27
- * @version 2016-12-28
+ * @version 2017-09-16
  */
 #ifndef __PP_VARIABLE_HPP__
 #define __PP_VARIABLE_HPP__
@@ -693,8 +693,7 @@ public:
 	 * @return true if this string literal shall be ordered before the right hand side one, else false
 	 */
 	bool operator< (const StringLiteral & rhs) const {
-		if (this->set == false && rhs.set == true) return true;
-		if (this->set == false || rhs.set == false) return false;
+		if (this->set < rhs.set) return true;
 		if (this->regexCaptures < rhs.regexCaptures) return true;
 		if (this->literal < rhs.literal) return true;
 		return false;
@@ -1040,7 +1039,11 @@ struct LessPathLiteralPtrValue {
 	 * right hand side value, else false
 	 */
 	bool operator() (const boost::shared_ptr<PathLiteral> & lh, const boost::shared_ptr<PathLiteral> & rh) const {
-		return lh->StringLiteral::operator< (static_cast<const StringLiteral &>(*rh));
+		/* Do not use
+		 * lh->StringLiteral::operator< (static_cast<const StringLiteral &>(*rh));
+		 * because we do not know if StringLiteral::fold() changed the content.
+		 */
+		return lh->getString() < rh->getString();
 	}
 };
 

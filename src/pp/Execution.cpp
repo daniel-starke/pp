@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2015-2017 Daniel Starke
  * @date 2015-03-22
- * @version 2016-12-29
+ * @version 2017-09-16
  */
 #include <fstream>
 #include <sstream>
@@ -54,6 +54,13 @@ static void updateTemporaryCreationFlags(const TemporaryFileInfoMap & temporaryF
 			keyValue.first->addFlags(PathLiteral::FORCED | PathLiteral::MODIFIED);
 			if (verbosity >= VERBOSITY_DEBUG) {
 				std::cerr << keyValue.first->getLineInfo() << ": Temporary target file will be created due to changed input dependency: " << keyValue.first->getString() << std::endl;
+			}
+			continue;
+		} else if ( keyValue.second.outputWillBeModified ) {
+			/* permanent output dependent will be modified */
+			keyValue.first->addFlags(PathLiteral::FORCED | PathLiteral::MODIFIED);
+			if (verbosity >= VERBOSITY_DEBUG) {
+				std::cerr << keyValue.first->getLineInfo() << ": Temporary target file will be created due to recreation of dependent output file: " << keyValue.first->getString() << std::endl;
 			}
 			continue;
 		}
@@ -306,7 +313,7 @@ bool Execution::complete(bool & isFirst) {
 					} else {
 						sout << "failed\n";
 					}
-				}   
+				}
 			}
 			const std::string output(sout.str());
 			if ( ! output.empty() ) {

@@ -5,7 +5,7 @@
  * @see fdios.h
  * @see fdious.h
  * @date 2016-08-17
- * @version 2017-01-14
+ * @version 2017-05-04
  * @internal This file is never used or compiled directly but only included.
  * @remarks Define CHAR_T to the character type before including this file.
  * @remarks See FPOPEN_FUNC() and FPCLOSE_FUNC() for further notes.
@@ -241,6 +241,7 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, cons
 					} else {
 						cmdLineLen++;
 					}
+					break;
 				default:
 					if (*cPtr == ' ' || *cPtr == '\t') hasSpaces[i] = 1;
 					escCount = 0;
@@ -292,6 +293,7 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, cons
 					}
 					*clPtr = '\\';
 					clPtr++;
+					break;
 				default:
 					escCount = 0;
 					break;

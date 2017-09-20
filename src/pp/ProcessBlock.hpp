@@ -256,7 +256,7 @@ public:
 			const RegExNamedCaptureSet namedCaptures = getRegExCaptureNames(this->filterStr);
 			boost::wsmatch what;
 			
-			if ( boost::regex_match(wstr, what, this->filter) && ( ! this->invertFilter )) {
+			if (boost::regex_match(wstr, what, this->filter) && ( ! this->invertFilter )) {
 				VariableMap captures;
 				/* overwrite previous captures with named captures from the input filter */
 				BOOST_FOREACH(const std::string & tag, namedCaptures) {
@@ -388,7 +388,7 @@ public:
 				const std::wstring wstr = boost::locale::conv::utf_to_utf<wchar_t>(str);
 				const RegExNamedCaptureSet namedCaptures = getRegExCaptureNames(this->filterStr);
 				boost::wsmatch what;
-				if ( boost::regex_match(wstr, what, this->filter) && ( ! this->invertFilter )) {
+				if (boost::regex_match(wstr, what, this->filter) && ( ! this->invertFilter )) {
 					VariableMap captures;
 					/* overwrite previous captures with named captures from the input filter */
 					BOOST_FOREACH(const std::string & tag, namedCaptures) {
@@ -528,7 +528,7 @@ public:
 							transition.output.push_back(boost::make_shared<PathLiteral>(variable.second));
 							PathLiteral & output(*(transition.output.back()));
 							/* handle temporary output file */
-							if ( origDestinationFile != this->destinations.end() ) {
+							if (origDestinationFile != this->destinations.end()) {
 								if ( origDestinationFile->second.hasFlags(PathLiteral::TEMPORARY) ) {
 									output.addFlags(PathLiteral::TEMPORARY);
 								}

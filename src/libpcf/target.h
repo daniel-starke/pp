@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2012-2017 Daniel Starke
  * @date 2012-12-08
- * @version 2017-01-14
+ * @version 2017-01-29
  */
 #ifndef __LIBPCF_TARGET_H__
 #define __LIBPCF_TARGET_H__
@@ -185,13 +185,13 @@ extern "C" {
 /* packed structure */
 #if defined(__clang__) || defined(__GNUC__)
 # define PCF_PACKED_START(x) x
-# define PCF_PACKED_END __attribute__((__packed__))
+# define PCF_PACKED_END __attribute__((__packed__)) ;
 #elif defined(_MSC_VER)
 # define PCF_PACKED_START(x) __pragma(pack(push, 1)) x
-# define PCF_PACKED_END __pragma(pack(pop))
+# define PCF_PACKED_END ; __pragma(pack(pop))
 #else
 # define PCF_PACKED_START(x) x
-# define PCF_PACKED_END
+# define PCF_PACKED_END ;
 #endif
 
 

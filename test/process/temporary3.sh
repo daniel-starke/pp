@@ -2,7 +2,7 @@
 # @author Daniel Starke
 # @copyright Copyright 2017 Daniel Starke
 # @date 2017-01-03
-# @version 2017-01-03
+# @version 2017-09-16
 
 temporary3_before() {
 	rm -rf temporary3
@@ -74,13 +74,10 @@ _END
 t_runs="2"
 
 to_var t_text <<"_END"
-^deleting "temporary3/l1_2\\.txt": ok$
-^deleting "temporary3/l1_3\\.txt": ok$
-_END
-
-to_var t_ntext <<"_END"
 l1_1.txt"\\?$
 ^deleting "temporary3/l1_1\\.txt": ok$
+^deleting "temporary3/l1_2\\.txt": ok$
+^deleting "temporary3/l1_3\\.txt": ok$
 _END
 
 to_var t_nerror <<"_END"
