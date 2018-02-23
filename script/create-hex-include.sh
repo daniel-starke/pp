@@ -1,7 +1,7 @@
 #!/bin/bash
 # @file create-hex-include.sh
 # @author Daniel Starke
-# @copyright Copyright 2015-2017 Daniel Starke
+# @copyright Copyright 2015-2018 Daniel Starke
 # @date 2015-12-03
 # @version 2015-12-10
 
@@ -40,7 +40,7 @@ IFS=""
 /**
  * @file `basename ${OUTPUT}`
  * @author ${pp_author}
- * @copyright Copyright 2015-2017 Daniel Starke
+ * @copyright Copyright 2015-2018 Daniel Starke
  * @copyright Copyright `date +"%Y"` ${pp_author}
  * @date `date +"%Y-%m-%d"`
  */

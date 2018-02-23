@@ -1,7 +1,7 @@
 /**
  * @file Script.cpp
  * @author Daniel Starke
- * @copyright Copyright 2015-2017 Daniel Starke
+ * @copyright Copyright 2015-2018 Daniel Starke
  * @date 2015-01-24
  * @version 2016-12-28
  * @remarks May fail to compile with GCC due to a bug for MinGW target within the GC

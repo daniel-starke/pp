@@ -1,7 +1,7 @@
 /**
  * @file SQLite3.hpp
  * @author Daniel Starke
- * @copyright Copyright 2014-2017 Daniel Starke
+ * @copyright Copyright 2014-2018 Daniel Starke
  * @date 2014-01-23
  * @version 2016-11-20
  */

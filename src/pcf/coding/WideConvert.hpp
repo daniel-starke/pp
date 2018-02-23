@@ -1,7 +1,7 @@
 /**
  * @file WideConvert.hpp
  * @author Daniel Starke
- * @copyright Copyright 2014-2017 Daniel Starke
+ * @copyright Copyright 2014-2018 Daniel Starke
  * @date 2014-10-19
  * @version 2016-05-01
  */

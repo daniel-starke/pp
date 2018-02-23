@@ -1,7 +1,7 @@
 /**
  * @file wildcardus.c
  * @author Daniel Starke
- * @copyright Copyright 2014-2017 Daniel Starke
+ * @copyright Copyright 2014-2018 Daniel Starke
  * @see wildcardus.h
  * @date 2014-11-05
  * @version 2016-05-01

@@ -1,7 +1,7 @@
 /**
  * @file Database.cpp
  * @author Daniel Starke
- * @copyright Copyright 2015-2017 Daniel Starke
+ * @copyright Copyright 2015-2018 Daniel Starke
  * @date 2015-10-01
  * @version 2016-10-29
  * @remarks This implementation requires SQLite3 to be build with SQLITE_ENABLE_UPDATE_DELETE_LIMIT.

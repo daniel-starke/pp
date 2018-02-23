@@ -1,7 +1,7 @@
 #!/bin/sh
 # @file ucd2tusproperty.sh
 # @author Daniel Starke
-# @copyright Copyright 2014-2017 Daniel Starke
+# @copyright Copyright 2014-2018 Daniel Starke
 # @see typeus.h
 # @date 2014-11-08
 # @version 2014-11-08

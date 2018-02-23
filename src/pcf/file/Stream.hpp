@@ -1,7 +1,7 @@
 /**
  * @file Stream.hpp
  * @author Daniel Starke
- * @copyright Copyright 2014-2017 Daniel Starke
+ * @copyright Copyright 2014-2018 Daniel Starke
  * @date 2014-10-11
  * @version 2016-12-23
  * @remarks This was not practical: http://sourceforge.net/p/mingw-w64/mailman/message/27708198/

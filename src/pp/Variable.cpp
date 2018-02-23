@@ -1,7 +1,7 @@
 /**
  * @file Variable.cpp
  * @author Daniel Starke
- * @copyright Copyright 2015-2017 Daniel Starke
+ * @copyright Copyright 2015-2018 Daniel Starke
  * @date 2015-01-27
  * @version 2016-12-19
  */

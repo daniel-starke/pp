@@ -1,7 +1,7 @@
 /**
  * @file Utility.cpp
  * @author Daniel Starke
- * @copyright Copyright 2013-2017 Daniel Starke
+ * @copyright Copyright 2013-2018 Daniel Starke
  * @date 2013-11-23
  * @version 2017-05-08
  */

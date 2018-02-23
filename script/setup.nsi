@@ -1,6 +1,6 @@
 # @file setup.nsi
 # @author Daniel Starke
-# @copyright Copyright 2015-2017 Daniel Starke
+# @copyright Copyright 2015-2018 Daniel Starke
 # @date 2015-12-02
 # @version 1.0.0 (2015-12-04)
 

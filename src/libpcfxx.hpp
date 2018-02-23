@@ -1,7 +1,7 @@
 /**
  * @file libpcfxx.hpp
  * @author Daniel Starke
- * @copyright Copyright 2013-2017 Daniel Starke
+ * @copyright Copyright 2013-2018 Daniel Starke
  * @date 2013-06-25
  * @version 2016-05-01
  *

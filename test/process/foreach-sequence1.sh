@@ -1,6 +1,6 @@
 # @file foreach-sequence1.sh
 # @author Daniel Starke
-# @copyright Copyright 2016-2017 Daniel Starke
+# @copyright Copyright 2016-2018 Daniel Starke
 # @date 2016-12-29
 # @version 2016-12-29
 

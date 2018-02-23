@@ -1,6 +1,6 @@
 # @file dependency1.sh
 # @author Daniel Starke
-# @copyright Copyright 2017 Daniel Starke
+# @copyright Copyright 2017-2018 Daniel Starke
 # @date 2017-09-16
 # @version 2017-09-16
 

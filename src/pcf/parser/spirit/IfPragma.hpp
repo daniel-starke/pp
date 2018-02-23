@@ -1,7 +1,7 @@
 /**
  * @file IfPragma.hpp
  * @author Daniel Starke
- * @copyright Copyright 2015-2017 Daniel Starke
+ * @copyright Copyright 2015-2018 Daniel Starke
  * @date 2015-11-27
  * @version 2016-11-20
  * @brief Enables if pragma statements with ifPragma(if, expr, then, [elseif], [else], [block-skipper], end)[block]

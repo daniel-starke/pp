@@ -1,7 +1,7 @@
 /**
  * @file target.h
  * @author Daniel Starke
- * @copyright Copyright 2012-2017 Daniel Starke
+ * @copyright Copyright 2012-2018 Daniel Starke
  * @date 2012-12-08
  * @version 2017-01-29
  */

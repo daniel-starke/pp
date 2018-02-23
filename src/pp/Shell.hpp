@@ -1,7 +1,7 @@
 /**
  * @file Shell.hpp
  * @author Daniel Starke
- * @copyright Copyright 2015-2017 Daniel Starke
+ * @copyright Copyright 2015-2018 Daniel Starke
  * @date 2015-09-17
  * @version 2016-11-19
  */

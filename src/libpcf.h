@@ -1,7 +1,7 @@
 /**
  * @file libpcf.h
  * @author Daniel Starke
- * @copyright Copyright 2010-2017 Daniel Starke
+ * @copyright Copyright 2010-2018 Daniel Starke
  * @date 2010-01-27
  * @version 2017-01-28
  *

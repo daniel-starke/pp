@@ -1,7 +1,7 @@
 /**
  * @file Target.hpp
  * @author Daniel Starke
- * @copyright Copyright 2013-2017 Daniel Starke
+ * @copyright Copyright 2013-2018 Daniel Starke
  * @date 2013-11-09
  * @version 2017-01-14
  */

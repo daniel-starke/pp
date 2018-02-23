@@ -1,7 +1,7 @@
 /**
  * @file Execution.cpp
  * @author Daniel Starke
- * @copyright Copyright 2015-2017 Daniel Starke
+ * @copyright Copyright 2015-2018 Daniel Starke
  * @date 2015-03-22
  * @version 2017-09-16
  */

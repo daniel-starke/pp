@@ -1,9 +1,9 @@
 /**
  * @file General.hpp
  * @author Daniel Starke
- * @copyright Copyright 2013-2017 Daniel Starke
+ * @copyright Copyright 2013-2018 Daniel Starke
  * @date 2013-07-04
- * @version 2016-05-01
+ * @version 2017-10-31
  */
 #ifndef __LIBPCFXX_EXCEPTION_GENERAL_HPP__
 #define __LIBPCFXX_EXCEPTION_GENERAL_HPP__
@@ -55,7 +55,10 @@ struct Database : virtual Api {};
 struct SQLite3 : virtual Database {};
 
 struct State : virtual Api {};
-struct InvalidState : virtual Api {};
+struct InvalidState : virtual State {};
+
+struct Initialization : virtual Api {};
+struct UnInitialized : virtual Initialization {};
 
 
 namespace tag {
