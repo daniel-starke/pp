@@ -4,7 +4,7 @@ install:
  - appveyor DownloadFile https://www.cygwin.com/setup-x86_64.exe -FileName C:\cygwin64\setup-x86_64.exe
 #- C:\cygwin64\setup-x86_64.exe -qnNdO -R C:/cygwin64 -s http://cygwin.mirror.constant.com -l C:/cygwin64/var/cache/setup -P mingw64-x86_64-clang -P mingw64-x86_64-boost -P mingw64-x86_64-sqlite3
  - C:\cygwin64\setup-x86_64.exe -qnNdO -R C:/cygwin64 -s http://cygwin.mirror.constant.com -l C:/cygwin64/var/cache/setup -P clang -P libboost-devel -P libsqlite3-devel
- - echo "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\x86_amd64\editbin.exe" /STACK:16777216 "C:\cygwin64\bin\clang-3.8.exe" >C:\patch-clang.bat
+ - echo "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\x86_amd64\editbin.exe" /STACK:16777216 "C:\cygwin64\bin\clang-5.0.exe" >C:\patch-clang.bat
  - C:\patch-clang.bat
 
 build_script:

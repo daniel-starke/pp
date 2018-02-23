@@ -23,6 +23,7 @@
 #include <windows.h>
 #include <winbase.h>
 #else /* ! PCF_IS_WIN */
+#include <errno.h>
 #include <signal.h>
 #include <unistd.h>
 #ifdef FPOPEN_UNICODE
