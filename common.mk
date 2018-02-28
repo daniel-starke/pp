@@ -1,7 +1,7 @@
 APPS = pp
 
-pp_version = 1.3.3
-pp_version_date = 2018-02-23
+pp_version = 1.3.4
+pp_version_date = 2018-02-28
 pp_author = Daniel Starke
 
 CPPFLAGS += '-DPP_VERSION="$(pp_version) ($(pp_version_date))"' '-DPP_AUTHOR="$(pp_author)"'
