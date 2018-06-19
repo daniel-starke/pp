@@ -2,7 +2,7 @@
 # @author Daniel Starke
 # @copyright Copyright 2015-2018 Daniel Starke
 # @date 2015-12-02
-# @version 1.0.0 (2015-12-04)
+# @version 1.0.0 (2018-04-05)
 
 !ifndef VERSION
 !define VERSION "unknown"
@@ -17,6 +17,7 @@ Var /GLOBAL OLDINSTALLDIR
 Name "${NAME}"
 OutFile "..\bin\${SETUP}.exe"
 SetCompressor /SOLID lzma
+Unicode true
 
 RequestExecutionLevel admin
 InstallDir "$PROGRAMFILES64\${APPNAME}"

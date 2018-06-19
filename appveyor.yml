@@ -1,4 +1,4 @@
-version: 1.3.4.{build}
+version: 1.3.5.{build}
 
 install:
  - appveyor DownloadFile https://www.cygwin.com/setup-x86_64.exe -FileName C:\cygwin64\setup-x86_64.exe

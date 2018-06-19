@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2013-2018 Daniel Starke
  * @date 2013-11-23
- * @version 2017-05-08
+ * @version 2018-06-18
  */
 #include <algorithm>
 #include <cstdlib>
@@ -574,6 +574,7 @@ boost::filesystem::path getExecutablePath(boost::system::error_code & errorCode)
  * Elements that are already in the output vector are preserved.
  *
  * @param[in,out] r - output path vector
+ * @param[in] b - already matched base part of the pattern path matching expression (p)
  * @param[in] p - path matching expression
  * @param[in] matchAll - set to true to check against all files recursively, false to match only path elements
  * @param[in] hasPattern - callback function to check if a path element contains a pattern
@@ -582,7 +583,7 @@ boost::filesystem::path getExecutablePath(boost::system::error_code & errorCode)
  * @return true on success, else false
  * @see CheckPatternCallback and MatchingCallback for callback definitions
  */
-bool getMatchingPathList(std::vector<boost::filesystem::path> & r, const boost::filesystem::path & p, const bool matchAll, const CheckPatternCallback & hasPattern, const UnescapePatternCallback & unescapePattern, const MatchingCallback & matchesPattern) {
+bool getMatchingPathList(std::vector<boost::filesystem::path> & r, const boost::filesystem::path & b, const boost::filesystem::path & p, const bool matchAll, const CheckPatternCallback & hasPattern, const UnescapePatternCallback & unescapePattern, const MatchingCallback & matchesPattern) {
 	boost::filesystem::path realPath, basePath;
 	boost::system::error_code ec;
 	boost::filesystem::path::const_iterator next, i = p.begin();
@@ -590,28 +591,36 @@ bool getMatchingPathList(std::vector<boost::filesystem::path> & r, const boost::
 	/* check pattern */
 	if ( p.empty() ) return true;
 	/* build real (existing) path */
-	for(; i != end; ++i) {
-		if ( hasPattern(i->wstring(utf8)) ) {
-			/* end of non-pattern path elements */
-			break;
-		} else {
-			if (boost::filesystem::exists(realPath / unescapePattern(i->wstring(utf8)), ec) && ( ! ec )) {
-				realPath /= unescapePattern(i->wstring(utf8));
-			} else {
-				/* end of non-pattern and non-real path elements */
+	if (b.empty() || !boost::filesystem::exists(b, ec) || ec) {
+		for(; i != end; ++i) {
+			if ( hasPattern(i->wstring(utf8)) ) {
+				/* end of non-pattern path elements */
 				break;
+			} else {
+				if (boost::filesystem::exists(realPath / unescapePattern(i->wstring(utf8)), ec) && ( ! ec )) {
+					realPath /= unescapePattern(i->wstring(utf8));
+				} else {
+					/* end of non-pattern and non-real path elements */
+					break;
+				}
 			}
 		}
-	}
-	/* build base (partly existing) path */
-	basePath = realPath;
-	for(; i != end; ++i) {
-		if ( hasPattern(i->wstring(utf8)) ) {
-			/* end of non-pattern path elements */
-			break;
-		} else {
-			basePath /= unescapePattern(i->wstring(utf8));
+		/* build base (partly existing) path */
+		basePath = realPath;
+		for(; i != end; ++i) {
+			if ( hasPattern(i->wstring(utf8)) ) {
+				/* end of non-pattern path elements */
+				break;
+			} else {
+				basePath /= unescapePattern(i->wstring(utf8));
+			}
 		}
+	} else {
+		realPath = b;
+		basePath = realPath;
+		boost::filesystem::path::const_iterator k = basePath.begin();
+		boost::filesystem::path::const_iterator kEnd = basePath.end();
+		for (; i != end && k != kEnd && *i == *k; ++i, ++k);
 	}
 	/* passed path does not exists */
 	if (realPath != basePath) return false;
@@ -649,7 +658,7 @@ bool getMatchingPathList(std::vector<boost::filesystem::path> & r, const boost::
 				/* match element-wise from here */
 				const bool removeBasePath = basePath.empty();
 				if ( removeBasePath ) basePath = boost::filesystem::current_path();
-				for (boost::filesystem::directory_iterator n(basePath), endN; n != endN; ++n) { 
+				for (boost::filesystem::directory_iterator n(basePath), endN; n != endN; ++n) {
 					const std::wstring element(n->path().filename().wstring(utf8));
 					if (element == L"." || element == L"..") continue;
 					if ( matchesPattern(element, pattern) ) {
@@ -661,9 +670,25 @@ bool getMatchingPathList(std::vector<boost::filesystem::path> & r, const boost::
 							}
 						} else if ( ! boost::filesystem::is_regular_file(n->status()) ) {
 							if ( removeBasePath ) {
-								result = result && getMatchingPathList(r, buildPathFromIterator(removeBase(basePath, n->path()), next, end), false, hasPattern, unescapePattern, matchesPattern);
+								result = result && getMatchingPathList(
+									r,
+									boost::filesystem::path(),
+									buildPathFromIterator(removeBase(basePath, n->path()), next, end),
+									false,
+									hasPattern,
+									unescapePattern,
+									matchesPattern
+								);
 							} else {
-								result = result && getMatchingPathList(r, buildPathFromIterator(n->path(), next, end), false, hasPattern, unescapePattern, matchesPattern);
+								result = result && getMatchingPathList(
+									r,
+									n->path(),
+									buildPathFromIterator(n->path(), next, end),
+									false,
+									hasPattern,
+									unescapePattern,
+									matchesPattern
+								);
 							}
 						}
 					}
@@ -725,6 +750,7 @@ bool getWildcardPathList(std::vector<boost::filesystem::path> & r, const std::ws
 
 	return getMatchingPathList(
 		r,
+		boost::filesystem::path(),
 		boost::filesystem::path(p, utf8),
 		matchAll,
 		CheckPatternCallbackNamespace::isWildcardPattern,
@@ -928,6 +954,7 @@ bool getRegexPathList(std::vector<boost::filesystem::path> & r, const std::wstri
 
 	return getMatchingPathList(
 		r,
+		boost::filesystem::path(),
 		boost::filesystem::path(escapedPattern, utf8),
 		matchAll,
 		CheckPatternCallbackNamespace::isRegexPattern,

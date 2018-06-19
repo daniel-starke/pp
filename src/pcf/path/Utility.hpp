@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2013-2018 Daniel Starke
  * @date 2013-11-23
- * @version 2016-12-23
+ * @version 2018-06-18
  */
 #ifndef __LIBPCFXX_PATH_UTILITY_HPP__
 #define __LIBPCFXX_PATH_UTILITY_HPP__
@@ -61,7 +61,7 @@ LIBPCFXX_DLLPORT boost::filesystem::path LIBPCFXX_DECL resolveExecutable(const b
 LIBPCFXX_DLLPORT boost::filesystem::path LIBPCFXX_DECL resolveExecutable(const boost::filesystem::path & path, boost::system::error_code & errorCode);
 LIBPCFXX_DLLPORT boost::filesystem::path LIBPCFXX_DECL getExecutablePath();
 LIBPCFXX_DLLPORT boost::filesystem::path LIBPCFXX_DECL getExecutablePath(boost::system::error_code & errorCode);
-LIBPCFXX_DLLPORT bool LIBPCFXX_DECL getMatchingPathList(std::vector<boost::filesystem::path> & r, const boost::filesystem::path & p, const bool matchAll, const CheckPatternCallback & hasPattern, const UnescapePatternCallback & unescapePattern, const MatchingCallback & matchesPattern);
+LIBPCFXX_DLLPORT bool LIBPCFXX_DECL getMatchingPathList(std::vector<boost::filesystem::path> & r, const boost::filesystem::path & b, const boost::filesystem::path & p, const bool matchAll, const CheckPatternCallback & hasPattern, const UnescapePatternCallback & unescapePattern, const MatchingCallback & matchesPattern);
 LIBPCFXX_DLLPORT bool LIBPCFXX_DECL getWildcardPathList(std::vector<boost::filesystem::path> & r, const std::wstring & p, const bool matchAll);
 LIBPCFXX_DLLPORT bool LIBPCFXX_DECL getRegexPathList(std::vector<boost::filesystem::path> & r, const std::wstring & p, const bool matchAll);
 
